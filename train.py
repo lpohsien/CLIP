@@ -22,6 +22,7 @@ OG_CONFIG_PATH = "./configs/vit-b32.yaml"
 SAVE_CHECKPOINT_PATH = "./checkpoints"
 # LOAD_CHECKPOINT_PATH = "./checkpoints/mini-vit_32_1.pth"
 LOAD_CHECKPOINT_PATH = None
+SAVE_CHECKPOINT = False
 
 torch.manual_seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -37,7 +38,7 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device):
         optimizer.zero_grad()
         logits, _ = model(images, captions)
         loss = criterion(logits, device=device)
-        print(logits)
+        # print(logits)
         # input()
         epoch_losses[i] = loss
         loss.backward()
@@ -88,8 +89,8 @@ with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 # BATCH_SIZE = config.get("batch_size")
 # TRAINING_EPOCHS = config.get("epochs")
-TRAIN_BATCH_SIZE = 32
-TRAINING_EPOCHS = 2
+TRAIN_BATCH_SIZE = 64
+TRAINING_EPOCHS = 4
 
 print(f"BATCH SIZE: {TRAIN_BATCH_SIZE}")
 print(f"EPOCHS: {TRAINING_EPOCHS}")
@@ -154,12 +155,13 @@ for epoch in range(TRAINING_EPOCHS):
     print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Training): {training_loss}")
     train_losses = np.append(train_losses, epoch_losses.cpu().detach().numpy())
 
-    eval_loss = eval(clip_model, val_loader, clip.clip.InfoNCELoss, device)
-    print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Eval): {eval_loss}")
-    eval_losses = np.append(eval_losses, eval_loss)
-    if eval_loss < min_loss:
-        min_loss = eval_loss
-        save_checkpoint(clip_model)
+    if SAVE_CHECKPOINT:
+        eval_loss = eval(clip_model, val_loader, clip.clip.InfoNCELoss, device)
+        print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Eval): {eval_loss}")
+        eval_losses = np.append(eval_losses, eval_loss)
+        if eval_loss < min_loss:
+            min_loss = eval_loss
+            save_checkpoint(clip_model)
 
 
 with open("train_losses.npy", "wb") as f:

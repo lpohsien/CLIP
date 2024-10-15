@@ -262,6 +262,5 @@ def InfoNCELoss(logits, device="cpu"):
     labels = torch.arange(logits.shape[0]).to(device)
     loss_i = F.cross_entropy(logits, labels)
     loss_t = F.cross_entropy(logits.T, labels)
-    print(loss_i, loss_t)
     loss = (loss_i + loss_t)/2
     return loss

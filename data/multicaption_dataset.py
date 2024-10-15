@@ -19,6 +19,8 @@ class MulticaptionDataset(Dataset):
         #load captions
         caption_path = os.path.join(root, f"{mode}.csv")
         self.captions_df = pd.read_csv(caption_path)
+        caption_path2 = os.path.join(root, f"{mode}2.csv")
+        self.captions_df2 = pd.read_csv(caption_path2)
 
         self.transform = image_transform
         self.tokenizer = text_tokenizer
@@ -28,17 +30,20 @@ class MulticaptionDataset(Dataset):
 
     def __getitem__(self, idx):
         caption = self.captions_df.iloc[idx, 1]
-        img_name = self.captions_df.iloc[idx, 0]
+        caption2 = self.captions_df2.iloc[idx, 1]
+        # img_name = self.captions_df.iloc[idx, 0]
         
-        img_path = os.path.join(self.images_dir, img_name)
-        image = Image.open(img_path).convert("RGB")
+        # img_path = os.path.join(self.images_dir, img_name)
+        # image = Image.open(img_path).convert("RGB")
 
-        if self.transform:
-            image = self.transform(image)
+        # if self.transform:
+        #     image = self.transform(image)
         if self.tokenizer:
             caption = self.tokenizer(caption)
+            caption2 = self.tokenizer(caption2)
 
-        return image, caption
+        # return image, caption
+        return caption2, caption
 
 # Example usage
 # import clip
