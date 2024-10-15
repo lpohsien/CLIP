@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from typing import Tuple, Union
+import yaml
 
 import numpy as np
 import torch
@@ -328,9 +329,10 @@ class CLIP(nn.Module):
     def build_attention_mask(self):
         # lazily create causal attention mask, with full attention between the vision tokens
         # pytorch uses additive attention mask; fill with -inf
+        # i.e. masked = softmax(unmasked + attn_mask) -> values with -inf added will be normalized to 0
         mask = torch.empty(self.context_length, self.context_length)
         mask.fill_(float("-inf"))
-        mask.triu_(1)  # zero out the lower diagonal
+        mask.triu_(1)  # zero out the lower diagonal (including main diagonal)
         return mask
 
     @property
@@ -365,8 +367,8 @@ class CLIP(nn.Module):
 
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp()
-        logits_per_image = logit_scale * image_features @ text_features.t()
-        logits_per_text = logits_per_image.t()
+        logits_per_image = logit_scale * image_features @ text_features.t() # image x text
+        logits_per_text = logits_per_image.t() # text x image
 
         # shape = [global_batch_size, global_batch_size]
         return logits_per_image, logits_per_text
@@ -434,3 +436,52 @@ def build_model(state_dict: dict):
     convert_weights(model)
     model.load_state_dict(state_dict)
     return model.eval()
+
+def write_model_config(state_dict: dict, log_path: str):
+
+    vit = "visual.proj" in state_dict
+
+    if vit:
+        vision_width = state_dict["visual.conv1.weight"].shape[0]
+        vision_layers = len([k for k in state_dict.keys() if k.startswith("visual.") and k.endswith(".attn.in_proj_weight")])
+        vision_patch_size = state_dict["visual.conv1.weight"].shape[-1]
+        grid_size = round((state_dict["visual.positional_embedding"].shape[0] - 1) ** 0.5)
+        image_resolution = vision_patch_size * grid_size
+    else:
+        counts: list = [len(set(k.split(".")[2] for k in state_dict if k.startswith(f"visual.layer{b}"))) for b in [1, 2, 3, 4]]
+        vision_layers = tuple(counts)
+        vision_width = state_dict["visual.layer1.0.conv1.weight"].shape[0]
+        output_width = round((state_dict["visual.attnpool.positional_embedding"].shape[0] - 1) ** 0.5)
+        vision_patch_size = None
+        assert output_width ** 2 + 1 == state_dict["visual.attnpool.positional_embedding"].shape[0]
+        image_resolution = output_width * 32
+
+    embed_dim = state_dict["text_projection"].shape[1]
+    context_length = state_dict["positional_embedding"].shape[0]
+    vocab_size = state_dict["token_embedding.weight"].shape[0]
+    transformer_width = state_dict["ln_final.weight"].shape[0]
+    transformer_heads = transformer_width // 64
+    transformer_layers = len(set(k.split(".")[2] for k in state_dict if k.startswith("transformer.resblocks")))
+
+    config = {
+        "embed_dim": embed_dim,
+        "visual": {
+            "type": "vit" if vit else "resnet",
+            "image_resolution": image_resolution,
+            "n_layers": vision_layers,
+            "width": vision_width,
+            "n_heads": vision_width // 64,
+            "patch_size": vision_patch_size
+        },
+        "text": {
+            "type": "simple",
+            "context_length": context_length,
+            "vocab_size": vocab_size,
+            "width": transformer_width,
+            "n_heads": transformer_heads,
+            "n_layers": transformer_layers
+        }
+    }
+
+    with open(log_path, "w") as f:
+        yaml.dump(config, f, sort_keys=False)

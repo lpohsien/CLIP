@@ -10,8 +10,9 @@ from PIL import Image
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 from tqdm import tqdm
 
-from .model import build_model
+from .model import build_model, write_model_config
 from .simple_tokenizer import SimpleTokenizer as _Tokenizer
+import torch.nn.functional as F
 
 try:
     from torchvision.transforms import InterpolationMode
@@ -91,7 +92,11 @@ def available_models() -> List[str]:
     return list(_MODELS.keys())
 
 
-def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_available() else "cpu", jit: bool = False, download_root: str = None):
+def load(name: str, 
+         device: Union[str, torch.device] = "cuda" if torch.cuda.is_available() else "cpu", 
+         jit: bool = False, 
+         download_root: str = None,
+         log_config_path: str = None):
     """Load a CLIP model
 
     Parameters
@@ -117,7 +122,7 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
         A torchvision transform that converts a PIL image into a tensor that the returned model can take as its input
     """
     if name in _MODELS:
-        model_path = _download(_MODELS[name], download_root or os.path.expanduser("~/.cache/clip"))
+        model_path = _download(_MODELS[name], download_root or os.path.expanduser("~/.cache/huggingface/hub"))
     elif os.path.isfile(name):
         model_path = name
     else:
@@ -133,7 +138,11 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
             if jit:
                 warnings.warn(f"File {model_path} is not a JIT archive. Loading as a state dict instead")
                 jit = False
-            state_dict = torch.load(opened_file, map_location="cpu")
+            opened_file.seek(0) # reset file pointer
+            state_dict = torch.load(opened_file, map_location="cpu", weights_only=True)
+
+    if log_config_path:
+        write_model_config(state_dict or model.state_dict(), log_config_path)
 
     if not jit:
         model = build_model(state_dict or model.state_dict()).to(device)
@@ -243,3 +252,16 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
         result[i, :len(tokens)] = torch.tensor(tokens)
 
     return result
+
+
+def InfoNCELoss(logits, device="cpu"):
+    '''
+    InfoNCE loss function for contrastive learning
+    logit_matrix: a tensor of shape (batch_size, batch_size)
+    '''
+    labels = torch.arange(logits.shape[0]).to(device)
+    loss_i = F.cross_entropy(logits, labels)
+    loss_t = F.cross_entropy(logits.T, labels)
+    print(loss_i, loss_t)
+    loss = (loss_i + loss_t)/2
+    return loss

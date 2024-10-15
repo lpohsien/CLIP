@@ -1,0 +1,29 @@
+# Description: Configuration file for mini-ViT model
+
+# Training configuration
+batch_size: 10
+training_epochs: 32
+max_temp: 100.0
+weight_decay: 0.2
+warmup_iters: 2000
+adam_beta1: 0.9
+adam_beta2: 0.98
+adam_epsilon: 1e-6
+
+# Model configuration
+lr: 0.0005
+embed_dim: 512
+visual:
+  type: 'vit'
+  image_resolution: 224
+  n_layers: 12
+  width: 768
+  n_heads: 12
+  patch_size: 32
+text:
+  type: 'simple'
+  n_layers: 12
+  width: 512
+  n_heads: 8
+  context_length: 77
+  vocab_size: 49408

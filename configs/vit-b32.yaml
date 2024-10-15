@@ -1,0 +1,15 @@
+embed_dim: 512
+visual:
+  type: vit
+  image_resolution: 224
+  n_layers: 12
+  width: 768
+  n_heads: 12
+  patch_size: 32
+text:
+  type: simple
+  context_length: 77
+  vocab_size: 49408
+  width: 512
+  n_heads: 8
+  n_layers: 12
