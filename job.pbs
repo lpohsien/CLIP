@@ -1,0 +1,21 @@
+#!/bin/bash
+#PBS -P volta_pilot
+#PBS -j oe
+#PBS -N clip_test
+#PBS -q volta_gpu
+#PBS -l select=1:ncpus=5:mem=50gb:ngpus=1
+#PBS -l walltime=24:00:00
+
+cd $PBS_O_WORKDIR;
+np=$(cat ${PBS_NODEFILE} | wc -l);
+
+module load singularity
+image="/app1/common/singularity-img/3.0.0/pytorch_1.11_cuda_11.3_cudnn8-py38.sif"
+singularity exec $image bash << EOF > stdout.$PBS_JOBID 2> stderr.$PBS_JOBID
+
+#nvidia-smi
+# pip install --user -r requirements.txt
+
+python train.py
+
+EOF
