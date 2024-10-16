@@ -404,8 +404,11 @@ class CLIP(nn.Module):
 
     def forward(self, image, text):
         # image_features = self.encode_image(image)
-        image_features = self.encode_text2(text)
+        image_features = self.encode_text2(image)
         text_features = self.encode_text(text)
+
+        og_image_features = image_features
+        og_text_features = text_features
 
         # normalized features
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
@@ -417,7 +420,7 @@ class CLIP(nn.Module):
         logits_per_text = logits_per_image.t() # text x image
 
         # shape = [global_batch_size, global_batch_size]
-        return logits_per_image, logits_per_text
+        return logits_per_image, logits_per_text, og_image_features, og_text_features
 
 
 def convert_weights(model: nn.Module):
