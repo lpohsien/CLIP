@@ -31,7 +31,7 @@ OG_CONFIG_PATH = "./configs/vit-b32.yaml"
 SAVE_CHECKPOINT_DIR = "./checkpoints"
 # LOAD_CHECKPOINT_PATH = "./checkpoints/mini-vit_256_32.pth"
 LOAD_CHECKPOINT_PATH = None
-SAVE_CHECKPOINT = False
+SAVE_CHECKPOINT = True
 DO_TRAIN = True
 
 RUN_TYPE = "text-text"
@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     # Directory Related
     DATASET_ROOT = args.dataset_root
-    SAVE_CHECKPOINT_DIR = args.save_checkpoint_path
+    SAVE_CHECKPOINT_DIR = args.save_checkpoint_dir
     LOAD_CHECKPOINT_PATH = args.load_checkpoint_path
 
     # Training Related
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     
     print(f"-------------- {RUN_NAME} --------------")
     print(f"Dataset root: {DATASET_ROOT}")
-    print(f"Save checkpoint path: {SAVE_CHECKPOINT_DIR}")
+    print(f"Save checkpoint directory: {SAVE_CHECKPOINT_DIR}")
     print(f"Load checkpoint path: {LOAD_CHECKPOINT_PATH}")
     print(f"")
     print("Training configurations:")

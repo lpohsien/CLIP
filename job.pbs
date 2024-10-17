@@ -18,7 +18,7 @@ do
     singularity exec $image bash << EOF >> stdout.$PBS_JOBID 2>> stderr.$PBS_JOBID
     
     python train.py --dataset_root='/home/svu/e0268113/datasets/flickr8k' \
-                    --save_checkpoint_dir='checkpoints' \
+                    --save_checkpoint_dir='/hpctmp/e0268113/checkpoints' \
                     --train_batch_size=$i \
                     --training_epochs=8
 EOF
