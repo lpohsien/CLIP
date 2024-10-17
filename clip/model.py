@@ -297,34 +297,81 @@ class CLIP(nn.Module):
 
         self.initialize_parameters()
 
-    def initialize_parameters(self):
-        nn.init.normal_(self.token_embedding.weight, std=0.02)
-        nn.init.normal_(self.positional_embedding, std=0.01)
+    def initialize_parameters(self, mode="both"):
+        assert mode in ["image_encoder", "text_encoder", "both"]
+        # Initialize the vision encoder
+        if mode == 'image_encoder' or mode == 'both':
+            if isinstance(self.visual, ModifiedResNet):
+                if self.visual.attnpool is not None:
+                    std = self.visual.attnpool.c_proj.in_features ** -0.5
+                    nn.init.normal_(self.visual.attnpool.q_proj.weight, std=std)
+                    nn.init.normal_(self.visual.attnpool.k_proj.weight, std=std)
+                    nn.init.normal_(self.visual.attnpool.v_proj.weight, std=std)
+                    nn.init.normal_(self.visual.attnpool.c_proj.weight, std=std)
 
-        if isinstance(self.visual, ModifiedResNet):
-            if self.visual.attnpool is not None:
-                std = self.visual.attnpool.c_proj.in_features ** -0.5
-                nn.init.normal_(self.visual.attnpool.q_proj.weight, std=std)
-                nn.init.normal_(self.visual.attnpool.k_proj.weight, std=std)
-                nn.init.normal_(self.visual.attnpool.v_proj.weight, std=std)
-                nn.init.normal_(self.visual.attnpool.c_proj.weight, std=std)
+                for resnet_block in [self.visual.layer1, self.visual.layer2, self.visual.layer3, self.visual.layer4]:
+                    for name, param in resnet_block.named_parameters():
+                        if name.endswith("bn3.weight"):
+                            nn.init.zeros_(param)
+            
+            if isinstance(self.visual, VisionTransformer):
+                nn.init.normal_(self.visual.conv1.weight, std=self.visual.conv1.weight.shape[1] ** -0.5)
+                nn.init.normal_(self.visual.class_embedding, std=0.02)
+                nn.init.normal_(self.visual.positional_embedding, std=0.01)
 
-            for resnet_block in [self.visual.layer1, self.visual.layer2, self.visual.layer3, self.visual.layer4]:
-                for name, param in resnet_block.named_parameters():
-                    if name.endswith("bn3.weight"):
-                        nn.init.zeros_(param)
+                proj_std = (self.visual.transformer.width ** -0.5) * ((2 * self.visual.transformer.layers) ** -0.5)
+                attn_std = self.visual.transformer.width ** -0.5
+                fc_std = (2 * self.visual.transformer.width) ** -0.5
 
-        proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)
-        attn_std = self.transformer.width ** -0.5
-        fc_std = (2 * self.transformer.width) ** -0.5
-        for block in self.transformer.resblocks:
-            nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
-            nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
-            nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
-            nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
+                for block in self.visual.transformer.resblocks:
+                    nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
+                    nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
+                    nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
+                    nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
 
-        if self.text_projection is not None:
-            nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
+                if self.visual.proj is not None:
+                    nn.init.normal_(self.visual.proj, std=self.visual.transformer.width ** -0.5)
+                # if self.visual.ln_pre is not None:
+                #     nn.init.normal_(self.visual.ln_pre.weight, std=1)
+                #     nn.init.zeros_(self.visual.ln_pre.bias)
+                # if self.visual.ln_post is not None:
+                #     nn.init.normal_(self.visual.ln_post.weight, std=1)
+                #     nn.init.zeros_(self.visual.ln_post.bias)
+
+
+        # Initialize the text encoder
+        if mode == 'text_encoder' or mode == 'both':
+            nn.init.normal_(self.token_embedding.weight, std=0.02)
+            nn.init.normal_(self.positional_embedding, std=0.01)
+
+            proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)
+            attn_std = self.transformer.width ** -0.5
+            fc_std = (2 * self.transformer.width) ** -0.5
+
+            for block in self.transformer.resblocks:
+                nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
+                nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
+                nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
+                nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
+
+            if self.text_projection is not None:
+                nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
+
+    def freeze_image_encoder(self):
+        for param in self.visual.parameters():
+            param.requires_grad = False
+
+    def freeze_text_encoder(self):
+        for param in self.token_embedding.parameters():
+            param.requires_grad = False
+        for param in self.positional_embedding.parameters():
+            param.requires_grad = False
+        for param in self.transformer.parameters():
+            param.requires_grad = False
+        for param in self.text_projection.parameters():
+            param.requires_grad = False
+        for param in self.ln_final.parameters():
+            param.requires_grad = False
 
 
     def build_attention_mask(self):
@@ -360,7 +407,7 @@ class CLIP(nn.Module):
 
     def forward(self, image, text):
         # image_features = self.encode_image(image)
-        image_features = self.encode_text(image)
+        image_features = self.encode_image(image)
         text_features = self.encode_text(text)
 
         # normalized features

@@ -30,20 +30,20 @@ class MulticaptionDataset(Dataset):
 
     def __getitem__(self, idx):
         caption = self.captions_df.iloc[idx, 1]
-        caption2 = self.captions_df2.iloc[idx, 1]
-        # img_name = self.captions_df.iloc[idx, 0]
+        # caption2 = self.captions_df2.iloc[idx, 1]
+        img_name = self.captions_df.iloc[idx, 0]
         
-        # img_path = os.path.join(self.images_dir, img_name)
-        # image = Image.open(img_path).convert("RGB")
+        img_path = os.path.join(self.images_dir, img_name)
+        image = Image.open(img_path).convert("RGB")
 
-        # if self.transform:
-        #     image = self.transform(image)
+        if self.transform:
+            image = self.transform(image)
         if self.tokenizer:
             caption = self.tokenizer(caption)
-            caption2 = self.tokenizer(caption2)
+            # caption2 = self.tokenizer(caption2)
 
         # return image, caption
-        return caption2, caption
+        return image, caption
 
 # Example usage
 # import clip
