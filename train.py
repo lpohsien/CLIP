@@ -15,7 +15,9 @@ import yaml
 import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import seaborn as sns
+import os
 
 # Optional: Load a subset of the data
 from torch.utils.data import Subset
@@ -26,13 +28,18 @@ DATASET_ROOT = "/home/phli/genAI/datasets/flickr8k"
 SEED = 42
 OG_CONFIG_PATH = "./configs/vit-b32.yaml"
 SAVE_CHECKPOINT_PATH = "./checkpoints"
-LOAD_CHECKPOINT_PATH = "./checkpoints/mini-vit_64_8.pth"
-# LOAD_CHECKPOINT_PATH = None
-SAVE_CHECKPOINT = True
+# LOAD_CHECKPOINT_PATH = "./checkpoints/mini-vit_256_32.pth"
+LOAD_CHECKPOINT_PATH = None
+SAVE_CHECKPOINT = False
 DO_TRAIN = False
 
-TRAIN_BATCH_SIZE = 64
-TRAINING_EPOCHS = 8
+RUN_TYPE = "text-text"
+TRAIN_BATCH_SIZE = 32
+TRAINING_EPOCHS = 4
+
+RUN_NAME = f"run-{RUN_TYPE}-{TRAIN_BATCH_SIZE}-{TRAINING_EPOCHS}" + "-eval" if not DO_TRAIN else ""
+os.makedirs(f"./logs/{RUN_NAME}", exist_ok=True)
+LOG_DIR = f"./logs/{RUN_NAME}"
 
 torch.manual_seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -96,7 +103,7 @@ def benchmark(model, bench_loader, topk=1, device="cuda", final=False):
             plt.title("Logits")
             plt.xlabel("captions")  
             plt.ylabel("images")
-            plt.savefig("logits.png")
+            plt.savefig(os.path.join(LOG_DIR, "logits.png"))
 
     return recall
 
@@ -119,7 +126,6 @@ def save_checkpoint(model):
         print(f"Model saved to {SAVE_CHECKPOINT_PATH}/{ckpt_name}.pth")
     else:
         print("No checkpoint path provided! Not saving checkpoint.")
-
 
 
 
@@ -195,7 +201,10 @@ if DO_TRAIN:
         print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Training): {training_loss}")
         train_losses = np.append(train_losses, epoch_losses.cpu().detach().numpy())
 
-        if epoch % 2 == 0:
+        if device == torch.device("cuda"):
+            print(f"Peak VRAM Allocated : {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
+
+        if epoch % 1 == 0:
             if SAVE_CHECKPOINT:
                 eval_loss = eval(clip_model, val_loader, clip.clip.InfoNCELoss, device)
                 print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Eval): {eval_loss}")
@@ -204,14 +213,15 @@ if DO_TRAIN:
                     min_loss = eval_loss
                     save_checkpoint(clip_model)
 
-            with open("train_losses.npy", "wb") as f:
+            with open(os.path.join(LOG_DIR, "train_losses.npy"), "wb") as f:
                 np.save(f, train_losses)
             plt.plot(range(1, len(train_losses) + 1), train_losses, marker='o')
-            plt.xlabel('Epoch')
+            plt.xlabel('Cycles')
             plt.ylabel('Loss')
             plt.title('Training Loss vs. Epoch')
             plt.grid(True)
-            plt.savefig("train_loss_plot.png")
+            plt.gca().xaxis.set_major_locator(MultipleLocator(len(train_loader)))
+            plt.savefig(os.path.join(LOG_DIR, "train_loss_plot.png"))
 
             r_at_1 = benchmark(clip_model, bench_loader, topk=1, device=device)
             print(f"Intermediate R@1: {r_at_1}")
