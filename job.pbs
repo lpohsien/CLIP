@@ -12,15 +12,16 @@ np=$(cat ${PBS_NODEFILE} | wc -l);
 module load singularity
 image="/app1/common/singularity-img/3.0.0/pytorch_1.11_cuda_11.3_cudnn8-py38.sif"
 
-for i in 16 32 64 128 256;
+for i in 1024 512 256 128 64 32 16;
 do
     echo "Running on $(hostname) with GPU $i";
     singularity exec $image bash << EOF >> stdout.$PBS_JOBID 2>> stderr.$PBS_JOBID
     
     python train.py --dataset_root='/home/svu/e0268113/datasets/flickr8k' \
-                    --save_checkpoint_dir='checkpoints' \
+                    --save_checkpoint_dir='/hpctmp/e0268113/checkpoints' \
+                    --load_checkpoint_path='/hpctmp/e0268113/checkpoints/ViT-B-32.pt' \
                     --train_batch_size=$i \
-                    --training_epochs=8
+                    --training_epochs=10
 EOF
 done
 
