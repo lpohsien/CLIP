@@ -28,7 +28,7 @@ DATASET_ROOT = "/home/phli/genAI/datasets/flickr8k"
 # DATASET_ROOT = "/home/svu/e0268113/datasets/flickr8k"
 SEED = 42
 OG_CONFIG_PATH = "./configs/vit-b32.yaml"
-SAVE_CHECKPOINT_PATH = "./checkpoints"
+SAVE_CHECKPOINT_DIR = "./checkpoints"
 # LOAD_CHECKPOINT_PATH = "./checkpoints/mini-vit_256_32.pth"
 LOAD_CHECKPOINT_PATH = None
 SAVE_CHECKPOINT = False
@@ -108,7 +108,7 @@ def benchmark(model, bench_loader, topk=1, device="cuda", final=False):
     return recall
 
 def save_checkpoint(model):
-    if SAVE_CHECKPOINT_PATH:
+    if SAVE_CHECKPOINT_DIR:
         config_filename = CONFIG_PATH.split("/")[-1].split(".")[0]
         prev_ckpt_name = LOAD_CHECKPOINT_PATH.split("/")[-1].split(".")[0] if LOAD_CHECKPOINT_PATH else None
         ckpt_name = config_filename
@@ -122,8 +122,8 @@ def save_checkpoint(model):
             if prev_training_epochs != training_epochs_str:
                 training_epochs_str = prev_training_epochs + "/" + training_epochs_str
         ckpt_name = config_filename + "_" + batch_size_str + "_" + training_epochs_str
-        torch.save(model.state_dict(), f"{SAVE_CHECKPOINT_PATH}/{ckpt_name}.pth")
-        print(f"Model saved to {SAVE_CHECKPOINT_PATH}/{ckpt_name}.pth")
+        torch.save(model.state_dict(), f"{SAVE_CHECKPOINT_DIR}/{ckpt_name}.pth")
+        print(f"Model saved to {SAVE_CHECKPOINT_DIR}/{ckpt_name}.pth")
     else:
         print("No checkpoint path provided! Not saving checkpoint.")
 
@@ -131,7 +131,7 @@ def save_checkpoint(model):
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--dataset_root", type=str, default=DATASET_ROOT)
-    argparser.add_argument("--save_checkpoint_path", type=str, default=SAVE_CHECKPOINT_PATH)
+    argparser.add_argument("--save_checkpoint_dir", type=str, default=SAVE_CHECKPOINT_DIR)
     argparser.add_argument("--load_checkpoint_path", type=str, default=LOAD_CHECKPOINT_PATH)
     argparser.add_argument("--train_batch_size", type=int, default=TRAIN_BATCH_SIZE)
     argparser.add_argument("--training_epochs", type=int, default=TRAINING_EPOCHS)
@@ -139,18 +139,25 @@ if __name__ == "__main__":
 
     # Directory Related
     DATASET_ROOT = args.dataset_root
-    SAVE_CHECKPOINT_PATH = args.save_checkpoint_path
+    SAVE_CHECKPOINT_DIR = args.save_checkpoint_path
     LOAD_CHECKPOINT_PATH = args.load_checkpoint_path
 
     # Training Related
     TRAIN_BATCH_SIZE = args.train_batch_size
     TRAINING_EPOCHS = args.training_epochs
-
+    
+    
+    print(f"-------------- {RUN_NAME} --------------")
     print(f"Dataset root: {DATASET_ROOT}")
-    print(f"Save checkpoint path: {SAVE_CHECKPOINT_PATH}")
+    print(f"Save checkpoint path: {SAVE_CHECKPOINT_DIR}")
     print(f"Load checkpoint path: {LOAD_CHECKPOINT_PATH}")
-    print(f"Train batch size: {TRAIN_BATCH_SIZE}")
-    print(f"Training epochs: {TRAINING_EPOCHS}")
+    print(f"")
+    print("Training configurations:")
+    print(f"  Train batch size: {TRAIN_BATCH_SIZE}")
+    print(f"  Training epochs: {TRAINING_EPOCHS}")
+    print(f"  Updating checkpoint: {SAVE_CHECKPOINT}")
+    print(f"  Evalation only: {not DO_TRAIN}")
+    print(f"----------------------------------------")
 
     # 1. Load training configs
     # Load model config from yaml
@@ -222,7 +229,7 @@ if __name__ == "__main__":
             if device == torch.device("cuda"):
                 print(f"Peak VRAM Allocated : {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
 
-            if epoch % 1 == 0:
+            if epoch % 2 == 0:
                 if SAVE_CHECKPOINT:
                     eval_loss = eval(clip_model, val_loader, clip.clip.InfoNCELoss, device)
                     print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Eval): {eval_loss}")
