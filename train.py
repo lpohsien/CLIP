@@ -36,10 +36,9 @@ DO_TRAIN = True
 
 RUN_TYPE = "text-text"
 TRAIN_BATCH_SIZE = 32
-TRAINING_EPOCHS = 4
+EVAL_BATCH_SIZE = 32
+TRAINING_EPOCHS = 8
 LOG_DIR = f"./logs"
-
-RUN_NAME = f"run-{RUN_TYPE}-{TRAIN_BATCH_SIZE}-{TRAINING_EPOCHS}" + "-eval" if not DO_TRAIN else ""
 
 torch.manual_seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -145,7 +144,7 @@ if __name__ == "__main__":
     # Training Related
     TRAIN_BATCH_SIZE = args.train_batch_size
     TRAINING_EPOCHS = args.training_epochs
-    
+    RUN_NAME = f"run-{RUN_TYPE}-{TRAIN_BATCH_SIZE}-{TRAINING_EPOCHS}" + ("-eval" if not DO_TRAIN else "")
     
     print(f"-------------- {RUN_NAME} --------------")
     print(f"Dataset root: {DATASET_ROOT}")
@@ -199,8 +198,8 @@ if __name__ == "__main__":
     train_set = MulticaptionDataset(DATASET_ROOT, "train", image_transform=ToTensor(), text_tokenizer=simple_tokenizer)
     val_set = MulticaptionDataset(DATASET_ROOT, "val", image_transform=ToTensor(), text_tokenizer=simple_tokenizer)
     train_loader = DataLoader(train_set, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=64, shuffle=False, drop_last=True)
-    bench_loader = DataLoader(val_set, batch_size=64, shuffle=False, drop_last=True)
+    val_loader = DataLoader(val_set, batch_size=EVAL_BATCH_SIZE, shuffle=False, drop_last=True)
+    bench_loader = DataLoader(val_set, batch_size=EVAL_BATCH_SIZE, shuffle=False, drop_last=True)
 
     # 3b. Train on only a subset of the data (Testing only)
     # subset_indices = subset_indices = list(range(0, 1600))
