@@ -29,16 +29,20 @@ DATASET_ROOT = "/home/phli/genAI/datasets/flickr8k"
 SEED = 42
 OG_CONFIG_PATH = "./configs/vit-b32.yaml"
 SAVE_CHECKPOINT_DIR = "./checkpoints"
-# LOAD_CHECKPOINT_PATH = "./checkpoints/mini-vit_256_32.pth"
+# LOAD_CHECKPOINT_PATH = "./checkpoints/mini-vit_32_4.pth"
 LOAD_CHECKPOINT_PATH = None
 SAVE_CHECKPOINT = True
 DO_TRAIN = True
+USE_OG_MODEL = True
 
-RUN_TYPE = "text-text"
-TRAIN_BATCH_SIZE = 32
-EVAL_BATCH_SIZE = 32
-TRAINING_EPOCHS = 8
+RUN_TYPE = "LiT"
+TRAIN_BATCH_SIZE = 64
+TRAINING_EPOCHS = 4
 LOG_DIR = f"./logs"
+
+# RUN_NAME = f"run-{RUN_TYPE}-{TRAIN_BATCH_SIZE}-{TRAINING_EPOCHS}" + ("-eval" if not DO_TRAIN else "")
+
+RUN_NAME = "NAHHH"
 
 torch.manual_seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -103,7 +107,6 @@ def benchmark(model, bench_loader, topk=1, device="cuda", final=False):
             plt.xlabel("captions")  
             plt.ylabel("images")
             plt.savefig(os.path.join(LOG_DIR, f"{RUN_NAME}-logits.png"))
-
     return recall
 
 def save_checkpoint(model):
@@ -144,6 +147,7 @@ if __name__ == "__main__":
     # Training Related
     TRAIN_BATCH_SIZE = args.train_batch_size
     TRAINING_EPOCHS = args.training_epochs
+    
     RUN_NAME = f"run-{RUN_TYPE}-{TRAIN_BATCH_SIZE}-{TRAINING_EPOCHS}" + ("-eval" if not DO_TRAIN else "")
     
     print(f"-------------- {RUN_NAME} --------------")
@@ -165,41 +169,45 @@ if __name__ == "__main__":
 
 
     # 2. Load model
-
-    # Load pretrained CLIP model
-    # clip_model, _clip_preprocessor = clip.load("ViT-B/32", log_config_path=OG_CONFIG_PATH)
-    # clip_model.to(device)
-
-    # Load custom CLIP model
     clip_model = None
-    if LOAD_CHECKPOINT_PATH:
-        print(f"Loading model from {LOAD_CHECKPOINT_PATH}")
-        clip_model, _ = clip.load(LOAD_CHECKPOINT_PATH) # Don't need the preprocessor
+    if USE_OG_MODEL:
+        # Load pretrained CLIP model
+        clip_model, _clip_preprocessor = clip.load("ViT-B/32", log_config_path=OG_CONFIG_PATH)
+        clip_model.to(device)
     else:
-        print("Initializing model from scratch")
-        clip_model = CLIP(
-                embed_dim=config.get("embed_dim"),
-                # vision
-                image_resolution=config.get("visual").get("image_resolution"),
-                vision_layers=config.get("visual").get("n_layers"),
-                vision_width=config.get("visual").get("width"),
-                vision_patch_size=config.get("visual").get("patch_size"),
-                # text
-                context_length=config.get("text").get("context_length"),
-                vocab_size=config.get("text").get("vocab_size"),
-                transformer_width=config.get("text").get("width"),
-                transformer_heads=config.get("text").get("n_heads"),
-                transformer_layers=config.get("text").get("n_layers"),
-            ).to(device)
-
+        # Load custom CLIP model
+        clip_model = None
+        if LOAD_CHECKPOINT_PATH:
+            print(f"Loading model from {LOAD_CHECKPOINT_PATH}")
+            clip_model, _ = clip.load(LOAD_CHECKPOINT_PATH) # Don't need the preprocessor
+        else:
+            print("Initializing model from scratch")
+            clip_model = CLIP(
+                    embed_dim=config.get("embed_dim"),
+                    # vision
+                    image_resolution=config.get("visual").get("image_resolution"),
+                    vision_layers=config.get("visual").get("n_layers"),
+                    vision_width=config.get("visual").get("width"),
+                    vision_patch_size=config.get("visual").get("patch_size"),
+                    # text
+                    context_length=config.get("text").get("context_length"),
+                    vocab_size=config.get("text").get("vocab_size"),
+                    transformer_width=config.get("text").get("width"),
+                    transformer_heads=config.get("text").get("n_heads"),
+                    transformer_layers=config.get("text").get("n_layers"),
+                ).to(device)
+            
+    clip_model.initialize_parameters(mode="text_encoder")
+    clip_model.freeze_image_encoder()
+            
     # 3. Load the dataset
     # We used the preprocessed image data, hence clip._transform is not needed
     simple_tokenizer = lambda x: clip.tokenize(x, context_length=config.get("text").get("context_length"))[0]
     train_set = MulticaptionDataset(DATASET_ROOT, "train", image_transform=ToTensor(), text_tokenizer=simple_tokenizer)
     val_set = MulticaptionDataset(DATASET_ROOT, "val", image_transform=ToTensor(), text_tokenizer=simple_tokenizer)
     train_loader = DataLoader(train_set, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=EVAL_BATCH_SIZE, shuffle=False, drop_last=True)
-    bench_loader = DataLoader(val_set, batch_size=EVAL_BATCH_SIZE, shuffle=False, drop_last=True)
+    val_loader = DataLoader(val_set, batch_size=32, shuffle=False, drop_last=True)
+    bench_loader = DataLoader(val_set, batch_size=32, shuffle=False, drop_last=True)
 
     # 3b. Train on only a subset of the data (Testing only)
     # subset_indices = subset_indices = list(range(0, 1600))
