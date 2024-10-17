@@ -19,16 +19,19 @@ do
     
     python train.py --dataset_root='/home/svu/e0268113/datasets/flickr8k' \
                     --save_checkpoint_dir='/hpctmp/e0268113/checkpoints' \
+                    --load_checkpoint_path='/hpctmp/e0268113/checkpoints/ViT-B-32.pt' \
                     --train_batch_size=$i \
                     --training_epochs=8
 EOF
 done
 
-# singularity exec $image bash << EOF > stdout.$PBS_JOBID 2> stderr.$PBS_JOBID
+singularity exec $image bash << EOF > stdout.$PBS_JOBID 2> stderr.$PBS_JOBID
 
-# #nvidia-smi
-# # pip install --user -r requirements.txt
 
-# python train.py
+python train.py --dataset_root='/home/svu/e0268113/datasets/flickr8k' \
+                --save_checkpoint_dir='/hpctmp/e0268113/checkpoints' \
+                --load_checkpoint_path='/hpctmp/e0268113/checkpoints/ViT-B-32.pt' \
+                --train_batch_size=128 \
+                --training_epochs=8
 
-# EOF
+EOF
