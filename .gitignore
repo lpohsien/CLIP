@@ -6,6 +6,7 @@ __pycache__/
 .ipynb_checkpoints
 *.pth
 *.pt
+*.venus01
 checkpoints/*
 logs/*
 
