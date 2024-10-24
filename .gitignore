@@ -9,6 +9,7 @@ __pycache__/
 *.venus01
 checkpoints/*
 logs/*
+wandb/*
 
 thumbs.db
 .DS_Store
