@@ -35,7 +35,7 @@ SAVE_CHECKPOINT_DIR = "./checkpoints"
 LOAD_CHECKPOINT_PATH = None
 SAVE_CHECKPOINT = True
 DO_TRAIN = True
-USE_OG_MODEL = True
+USE_OG_MODEL = False
 
 RUN_TYPE = "LiT"
 TRAIN_BATCH_SIZE = 128
@@ -123,17 +123,22 @@ def save_checkpoint(model, optimizer=None):
     if SAVE_CHECKPOINT_DIR:
         config_filename = CONFIG_PATH.split("/")[-1].split(".")[0]
         prev_ckpt_name = LOAD_CHECKPOINT_PATH.split("/")[-1].split(".")[0] if LOAD_CHECKPOINT_PATH else None
-        ckpt_name = config_filename
+        ckpt_name = ""
         batch_size_str = str(TRAIN_BATCH_SIZE)
         training_epochs_str = str(TRAINING_EPOCHS)
-        if prev_ckpt_name:
-            prev_batch_size = prev_ckpt_name.split("_")[1]
-            prev_training_epochs = prev_ckpt_name.split("_")[2]
-            if prev_batch_size != batch_size_str:
-                batch_size_str = prev_batch_size + "/" + batch_size_str
-            if prev_training_epochs != training_epochs_str:
-                training_epochs_str = prev_training_epochs + "/" + training_epochs_str
-        ckpt_name = config_filename + "_" + batch_size_str + "_" + training_epochs_str
+        if prev_ckpt_name: # Reuse previous checkpoint's name
+            components = prev_ckpt_name.split("/")
+            if len(components) == 3: # Custom naming convention, update batch size and training epochs
+                prev_batch_size = prev_ckpt_name.split("_")[1]
+                prev_training_epochs = prev_ckpt_name.split("_")[2]
+                if prev_batch_size != batch_size_str:
+                    batch_size_str = prev_batch_size + "/" + batch_size_str
+                if prev_training_epochs != training_epochs_str:
+                    training_epochs_str = prev_training_epochs + "/" + training_epochs_str
+            else: # Reuse existing checkpoint's name
+                ckpt_name = f"{components[0]}_{batch_size_str}_{training_epochs_str}"
+        else: # New naming convention
+            ckpt_name = f"{config[0]}_{batch_size_str}_{training_epochs_str}"
         torch.save(model.state_dict(), f"{SAVE_CHECKPOINT_DIR}/{ckpt_name}.pth")
         print(f"Model saved to {SAVE_CHECKPOINT_DIR}/{ckpt_name}.pth")
         if optimizer:
@@ -172,14 +177,13 @@ if __name__ == "__main__":
     print(f"  Train batch size: {TRAIN_BATCH_SIZE}")
     print(f"  Training epochs: {TRAINING_EPOCHS}")
     print(f"  Updating checkpoint: {SAVE_CHECKPOINT}")
-    print(f"  Evalation only: {not DO_TRAIN}")
+    print(f"  Evaluation only: {not DO_TRAIN}")
     print(f"----------------------------------------")
 
     # 1. Load training configs
     # Load model config from yaml
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
-
 
     # 2. Load model
     clip_model = None
@@ -263,10 +267,10 @@ if __name__ == "__main__":
                 print(f"Peak VRAM Allocated : {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
 
             if epoch % 2 == 0:
+                eval_loss = eval(clip_model, val_loader, clip.clip.InfoNCELoss, device)
+                eval_losses = np.append(eval_losses, eval_loss)
                 if SAVE_CHECKPOINT:
-                    eval_loss = eval(clip_model, val_loader, clip.clip.InfoNCELoss, device)
                     print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Eval): {eval_loss}")
-                    eval_losses = np.append(eval_losses, eval_loss)
                     if eval_loss < min_loss and epoch > 0: # Don't save the first epoch
                         min_loss = eval_loss
                         save_checkpoint(clip_model, optimizer)

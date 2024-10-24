@@ -364,14 +364,12 @@ class CLIP(nn.Module):
     def freeze_text_encoder(self):
         for param in self.token_embedding.parameters():
             param.requires_grad = False
-        for param in self.positional_embedding.parameters():
-            param.requires_grad = False
         for param in self.transformer.parameters():
-            param.requires_grad = False
-        for param in self.text_projection.parameters():
             param.requires_grad = False
         for param in self.ln_final.parameters():
             param.requires_grad = False
+        self.text_projection.requires_grad = False
+        self.positional_embedding.requires_grad = False
 
 
     def build_attention_mask(self):
