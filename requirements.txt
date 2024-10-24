@@ -5,3 +5,5 @@ tqdm
 torch
 torchvision
 PyYAML
+seaborn
+wandb
