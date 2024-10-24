@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 import seaborn as sns
 import os
+import wandb
 
 # Optional: Load a subset of the data
 from torch.utils.data import Subset
@@ -29,16 +30,17 @@ DATASET_ROOT = "/home/phli/genAI/datasets/flickr8k"
 SEED = 42
 OG_CONFIG_PATH = "./configs/vit-b32.yaml"
 SAVE_CHECKPOINT_DIR = "./checkpoints"
-# LOAD_CHECKPOINT_PATH = "./checkpoints/mini-vit_32_4.pth"
-LOAD_CHECKPOINT_PATH = None
+LOAD_CHECKPOINT_PATH = "./checkpoints/LiT-base_128_8.pth"
+# LOAD_CHECKPOINT_PATH = None
 SAVE_CHECKPOINT = True
 DO_TRAIN = True
-USE_OG_MODEL = True
+USE_OG_MODEL = False
 
 RUN_TYPE = "LiT"
-TRAIN_BATCH_SIZE = 64
-TRAINING_EPOCHS = 4
+TRAIN_BATCH_SIZE = 128
+TRAINING_EPOCHS = 8
 LOG_DIR = f"./logs"
+USE_WANDB = True
 
 # RUN_NAME = f"run-{RUN_TYPE}-{TRAIN_BATCH_SIZE}-{TRAINING_EPOCHS}" + ("-eval" if not DO_TRAIN else "")
 
@@ -72,6 +74,8 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device):
         epoch_losses[i] = loss
         loss.backward()
         optimizer.step()
+        if USE_WANDB:
+            wandb.log({"loss": loss.item(), "logits": logits})
         total_loss += loss
         if device == "cuda":
             torch.cuda.empty_cache()
@@ -80,14 +84,17 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device):
     return total_loss / (len(train_loader)), epoch_losses
 
 def eval(model, val_loader, criterion, device):
-    model.eval()
+    # model.eval()
     total_loss = torch.tensor(0.0).to(device)
     with torch.no_grad():
         for images, captions in tqdm.tqdm(val_loader):
             logits, _ = model(images.to("cuda"), captions.to("cuda"))
-            total_loss += criterion(logits, device=device)
-            if device == "cuda":
-                torch.cuda.empty_cache()
+            loss = criterion(logits, device=device)
+            total_loss += loss
+            if USE_WANDB:
+                wandb.log({"val_loss": loss.item()})
+            # if device == "cuda":
+            #     torch.cuda.empty_cache()
     total_loss = total_loss.item()
     return total_loss / len(val_loader)
 
@@ -97,9 +104,11 @@ def benchmark(model, bench_loader, topk=1, device="cuda", final=False):
     with torch.no_grad():
         images, captions = next(iter(bench_loader))
         logits, _ = model(images.to(device), captions.to(device))
-        recall = recall_at_k(logits, k=topk)
+        recall_image = recall_at_k(logits, k=topk)
+        recall_text = recall_at_k(logits, k=topk, dim=0)
         print(logits)
-
+        if USE_WANDB:
+            wandb.log({"R@1 Image": recall_image, "R@1 Text": recall_text})
         if final:
             plt.figure(figsize=(10, 10))
             sns.heatmap(logits.cpu().numpy(), annot=False, fmt=".2f", cmap="coolwarm")
@@ -107,9 +116,9 @@ def benchmark(model, bench_loader, topk=1, device="cuda", final=False):
             plt.xlabel("captions")  
             plt.ylabel("images")
             plt.savefig(os.path.join(LOG_DIR, f"{RUN_NAME}-logits.png"))
-    return recall
+    return recall_image, recall_text
 
-def save_checkpoint(model):
+def save_checkpoint(model, optimizer=None):
     if SAVE_CHECKPOINT_DIR:
         config_filename = CONFIG_PATH.split("/")[-1].split(".")[0]
         prev_ckpt_name = LOAD_CHECKPOINT_PATH.split("/")[-1].split(".")[0] if LOAD_CHECKPOINT_PATH else None
@@ -126,6 +135,9 @@ def save_checkpoint(model):
         ckpt_name = config_filename + "_" + batch_size_str + "_" + training_epochs_str
         torch.save(model.state_dict(), f"{SAVE_CHECKPOINT_DIR}/{ckpt_name}.pth")
         print(f"Model saved to {SAVE_CHECKPOINT_DIR}/{ckpt_name}.pth")
+        if optimizer:
+            torch.save(optimizer.state_dict(), f"{SAVE_CHECKPOINT_DIR}/{ckpt_name}-optim.pth")
+            print(f"Optimizer state saved to {SAVE_CHECKPOINT_DIR}/{ckpt_name}-optim.pth")
     else:
         print("No checkpoint path provided! Not saving checkpoint.")
 
@@ -197,14 +209,19 @@ if __name__ == "__main__":
                     transformer_layers=config.get("text").get("n_layers"),
                 ).to(device)
             
-    clip_model.initialize_parameters(mode="text_encoder")
+    # clip_model.initialize_parameters(mode="text_encoder")
     clip_model.freeze_image_encoder()
+
+    if USE_WANDB:
+        wandb.init(project="clip-multicaption", name=RUN_NAME)
+        wandb.config.update(config)
+        wandb.watch(clip_model.transformer, log="all", log_freq=10)
             
     # 3. Load the dataset
     # We used the preprocessed image data, hence clip._transform is not needed
     simple_tokenizer = lambda x: clip.tokenize(x, context_length=config.get("text").get("context_length"))[0]
-    train_set = MulticaptionDataset(DATASET_ROOT, "train", image_transform=ToTensor(), text_tokenizer=simple_tokenizer)
-    val_set = MulticaptionDataset(DATASET_ROOT, "val", image_transform=ToTensor(), text_tokenizer=simple_tokenizer)
+    train_set = MulticaptionDataset(DATASET_ROOT, "train", image_transform=clip.clip._transform(224), text_tokenizer=simple_tokenizer)
+    val_set = MulticaptionDataset(DATASET_ROOT, "val", image_transform=clip.clip._transform(224), text_tokenizer=simple_tokenizer)
     train_loader = DataLoader(train_set, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=32, shuffle=False, drop_last=True)
     bench_loader = DataLoader(val_set, batch_size=32, shuffle=False, drop_last=True)
@@ -215,13 +232,16 @@ if __name__ == "__main__":
     # train_loader = DataLoader(subset_train_set, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
 
     # 4. Define loss and optimizer
-    optimizer = optim.Adam(
+    optimizer = optim.AdamW(
         clip_model.parameters(),
         betas=(config.get("adam_beta1"), config.get("adam_beta2")),
         eps=float(config.get("adam_epsilon")),
         lr=config.get("lr"),
         weight_decay=config.get("weight_decay")
     )
+    if LOAD_CHECKPOINT_PATH and os.path.exists(LOAD_CHECKPOINT_PATH.replace(".pth", "-optim.pth")):
+        optimizer.load_state_dict(torch.load(LOAD_CHECKPOINT_PATH.replace(".pth", "-optim.pth"), weights_only=True))
+        print(f"Optimizer state loaded from {LOAD_CHECKPOINT_PATH.replace('.pth', '-optim.pth')}")
 
     # 5. Train the model
     if DO_TRAIN:
@@ -245,8 +265,6 @@ if __name__ == "__main__":
                         min_loss = eval_loss
                         save_checkpoint(clip_model)
 
-                with open(os.path.join(LOG_DIR, f"{RUN_NAME}-losses.npy"), "wb") as f:
-                    np.save(f, train_losses)
                 plt.plot(range(1, len(train_losses) + 1), train_losses, marker='o')
                 plt.xlabel('Cycles')
                 plt.ylabel('Loss')

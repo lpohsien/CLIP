@@ -142,7 +142,7 @@ def load(name: str,
             if int(torch.__version__.split(".")[0]) < 2:
                 state_dict = torch.load(opened_file, map_location="cpu")
             else:
-                state_dict = torch.load(opened_file, map_location="cpu", weigthts_only=True)
+                state_dict = torch.load(opened_file, map_location="cpu", weights_only=True)
 
     if log_config_path:
         write_model_config(state_dict or model.state_dict(), log_config_path)
