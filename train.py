@@ -92,7 +92,7 @@ def eval(model, val_loader, criterion, device):
             loss = criterion(logits, device=device)
             total_loss += loss
             if USE_WANDB:
-                wandb.log({"val_loss": loss.item()})
+                wandb.log({"eval_loss": loss.item()})
             # if device == "cuda":
             #     torch.cuda.empty_cache()
     total_loss = total_loss.item()
@@ -100,7 +100,6 @@ def eval(model, val_loader, criterion, device):
 
 def benchmark(model, bench_loader, topk=1, device="cuda", final=False):
     model.eval()
-    recall = 0
     with torch.no_grad():
         images, captions = next(iter(bench_loader))
         logits, _ = model(images.to(device), captions.to(device))
@@ -223,8 +222,8 @@ if __name__ == "__main__":
     train_set = MulticaptionDataset(DATASET_ROOT, "train", image_transform=clip.clip._transform(224), text_tokenizer=simple_tokenizer)
     val_set = MulticaptionDataset(DATASET_ROOT, "val", image_transform=clip.clip._transform(224), text_tokenizer=simple_tokenizer)
     train_loader = DataLoader(train_set, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=32, shuffle=False, drop_last=True)
-    bench_loader = DataLoader(val_set, batch_size=32, shuffle=False, drop_last=True)
+    val_loader = DataLoader(val_set, batch_size=256, shuffle=False, drop_last=True)
+    bench_loader = DataLoader(val_set, batch_size=256, shuffle=False, drop_last=True)
 
     # 3b. Train on only a subset of the data (Testing only)
     # subset_indices = subset_indices = list(range(0, 1600))
