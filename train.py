@@ -7,6 +7,7 @@ from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import torch.cuda
+import torch.optim.lr_scheduler as lr_scheduler
 
 # Config parsing
 import yaml
@@ -30,15 +31,15 @@ DATASET_ROOT = "/home/phli/genAI/datasets/flickr8k"
 SEED = 42
 OG_CONFIG_PATH = "./configs/vit-b32.yaml"
 SAVE_CHECKPOINT_DIR = "./checkpoints"
-LOAD_CHECKPOINT_PATH = "./checkpoints/LiT-base_128_8.pth"
-# LOAD_CHECKPOINT_PATH = None
+# LOAD_CHECKPOINT_PATH = "./checkpoints/LiT-base_128_8.pth"
+LOAD_CHECKPOINT_PATH = None
 SAVE_CHECKPOINT = True
 DO_TRAIN = True
-USE_OG_MODEL = False
+USE_OG_MODEL = True
 
 RUN_TYPE = "LiT"
 TRAIN_BATCH_SIZE = 128
-TRAINING_EPOCHS = 8
+TRAINING_EPOCHS = 16
 LOG_DIR = f"./logs"
 USE_WANDB = True
 
@@ -102,7 +103,8 @@ def benchmark(model, bench_loader, topk=1, device="cuda", final=False):
     model.eval()
     with torch.no_grad():
         images, captions = next(iter(bench_loader))
-        logits, _ = model(images.to(device), captions.to(device))
+        with torch.no_grad():
+            logits, _ = model(images.to(device), captions.to(device))
         recall_image = recall_at_k(logits, k=topk)
         recall_text = recall_at_k(logits, k=topk, dim=0)
         print(logits)
@@ -208,7 +210,7 @@ if __name__ == "__main__":
                     transformer_layers=config.get("text").get("n_layers"),
                 ).to(device)
             
-    # clip_model.initialize_parameters(mode="text_encoder")
+    clip_model.initialize_parameters(mode="text_encoder")
     clip_model.freeze_image_encoder()
 
     if USE_WANDB:
@@ -242,6 +244,10 @@ if __name__ == "__main__":
         optimizer.load_state_dict(torch.load(LOAD_CHECKPOINT_PATH.replace(".pth", "-optim.pth"), weights_only=True))
         print(f"Optimizer state loaded from {LOAD_CHECKPOINT_PATH.replace('.pth', '-optim.pth')}")
 
+    warmup_scheduler = lr_scheduler.LinearLR(optimizer, start_factor=0.1, total_iters=5)
+    # cosine_scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
+    # scheduler = lr_scheduler.SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
+
     # 5. Train the model
     if DO_TRAIN:
         train_losses = np.array([])
@@ -249,6 +255,7 @@ if __name__ == "__main__":
         min_loss = float("inf")
         for epoch in range(TRAINING_EPOCHS):
             training_loss, epoch_losses = train_one_epoch(clip_model, train_loader, optimizer, clip.clip.InfoNCELoss, device)
+            warmup_scheduler.step()
             print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Training): {training_loss}")
             train_losses = np.append(train_losses, epoch_losses.cpu().detach().numpy())
 
@@ -262,7 +269,7 @@ if __name__ == "__main__":
                     eval_losses = np.append(eval_losses, eval_loss)
                     if eval_loss < min_loss and epoch > 0: # Don't save the first epoch
                         min_loss = eval_loss
-                        save_checkpoint(clip_model)
+                        save_checkpoint(clip_model, optimizer)
 
                 plt.plot(range(1, len(train_losses) + 1), train_losses, marker='o')
                 plt.xlabel('Cycles')
