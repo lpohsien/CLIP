@@ -75,6 +75,7 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device):
         epoch_losses[i] = loss
         loss.backward()
         optimizer.step()
+        torch.clamp(model.logit_scale, -100, 100)
         if USE_WANDB:
             wandb.log({"loss": loss.item(), "logits": logits})
         total_loss += loss
@@ -138,7 +139,7 @@ def save_checkpoint(model, optimizer=None):
             else: # Reuse existing checkpoint's name
                 ckpt_name = f"{components[0]}_{batch_size_str}_{training_epochs_str}"
         else: # New naming convention
-            ckpt_name = f"{config[0]}_{batch_size_str}_{training_epochs_str}"
+            ckpt_name = f"{config_filename}_{batch_size_str}_{training_epochs_str}"
         torch.save(model.state_dict(), f"{SAVE_CHECKPOINT_DIR}/{ckpt_name}.pth")
         print(f"Model saved to {SAVE_CHECKPOINT_DIR}/{ckpt_name}.pth")
         if optimizer:
@@ -218,7 +219,7 @@ if __name__ == "__main__":
     clip_model.freeze_image_encoder()
 
     if USE_WANDB:
-        wandb.init(project="clip-multicaption", name=RUN_NAME)
+        wandb.init(project="clip-multicaption", name=RUN_NAME, mode="offline")
         wandb.config.update(config)
         wandb.watch(clip_model.transformer, log="all", log_freq=10)
             
@@ -227,7 +228,7 @@ if __name__ == "__main__":
     simple_tokenizer = lambda x: clip.tokenize(x, context_length=config.get("text").get("context_length"))[0]
     train_set = MulticaptionDataset(DATASET_ROOT, "train", image_transform=clip.clip._transform(224), text_tokenizer=simple_tokenizer)
     val_set = MulticaptionDataset(DATASET_ROOT, "val", image_transform=clip.clip._transform(224), text_tokenizer=simple_tokenizer)
-    train_loader = DataLoader(train_set, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
+    train_loader = DataLoader(train_set, batch_size=TRAIN_BATCH_SIZE, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_set, batch_size=256, shuffle=False, drop_last=True)
     bench_loader = DataLoader(val_set, batch_size=256, shuffle=False, drop_last=True)
 
@@ -249,8 +250,8 @@ if __name__ == "__main__":
         print(f"Optimizer state loaded from {LOAD_CHECKPOINT_PATH.replace('.pth', '-optim.pth')}")
 
     warmup_scheduler = lr_scheduler.LinearLR(optimizer, start_factor=0.1, total_iters=5)
-    # cosine_scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
-    # scheduler = lr_scheduler.SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
+    cosine_scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=TRAINING_EPOCHS - 5)
+    scheduler = lr_scheduler.SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
 
     # 5. Train the model
     if DO_TRAIN:
@@ -259,7 +260,7 @@ if __name__ == "__main__":
         min_loss = float("inf")
         for epoch in range(TRAINING_EPOCHS):
             training_loss, epoch_losses = train_one_epoch(clip_model, train_loader, optimizer, clip.clip.InfoNCELoss, device)
-            warmup_scheduler.step()
+            scheduler.step()
             print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Training): {training_loss}")
             train_losses = np.append(train_losses, epoch_losses.cpu().detach().numpy())
 
