@@ -29,8 +29,8 @@ src_images_folder = os.path.join(DATASET_ROOT_DIR, "Images")
 src_captions_file = os.path.join(DATASET_ROOT_DIR, "captions.txt")
 
 # Path to save the train and val splits
-train_images_folder = os.path.join(DATASET_ROOT_DIR, "train_raw")
-val_images_folder = os.path.join(DATASET_ROOT_DIR, "val_raw")
+train_images_folder = os.path.join(DATASET_ROOT_DIR, "train")
+val_images_folder = os.path.join(DATASET_ROOT_DIR, "val")
 train_captions_file = os.path.join(DATASET_ROOT_DIR, "train.csv")
 val_captions_file = os.path.join(DATASET_ROOT_DIR, "val.csv")
 
@@ -55,14 +55,14 @@ train_df.to_csv(train_captions_file, index=False)
 val_df.to_csv(val_captions_file, index=False)
 
 # Move images to train and val folders
-# if not os.path.exists(train_images_folder):
-#     os.makedirs(train_images_folder)
-# if not os.path.exists(val_images_folder):
-#     os.makedirs(val_images_folder)
-# for image in train_images:
-#     os.rename(os.path.join(src_images_folder, image), os.path.join(train_images_folder, image))
-# for image in val_images:
-#     os.rename(os.path.join(src_images_folder, image), os.path.join(val_images_folder, image))
+if not os.path.exists(train_images_folder):
+    os.makedirs(train_images_folder)
+if not os.path.exists(val_images_folder):
+    os.makedirs(val_images_folder)
+for image in train_images:
+    os.rename(os.path.join(src_images_folder, image), os.path.join(train_images_folder, image))
+for image in val_images:
+    os.rename(os.path.join(src_images_folder, image), os.path.join(val_images_folder, image))
 
 assert len(train_images) + len(val_images) == len(unique_images), \
     "Images from train + val doesn't match the total images"

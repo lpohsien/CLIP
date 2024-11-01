@@ -403,7 +403,7 @@ class CLIP(nn.Module):
 
         return x
 
-    def forward(self, image, text):
+    def forward(self, image, text, mode: Union["logits", "features"] = "logits"):
         # image_features = self.encode_image(image)
         image_features = self.encode_image(image)
         text_features = self.encode_text(text)
@@ -416,6 +416,9 @@ class CLIP(nn.Module):
         logit_scale = self.logit_scale.exp()
         logits_per_image = logit_scale * image_features @ text_features.t() # image x text
         logits_per_text = logits_per_image.t() # text x image
+
+        if mode == "features":
+            return logits_per_image, logits_per_text, image_features, text_features
 
         # shape = [global_batch_size, global_batch_size]
         return logits_per_image, logits_per_text

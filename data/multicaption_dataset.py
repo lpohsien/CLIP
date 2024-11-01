@@ -22,6 +22,8 @@ class MulticaptionDataset(Dataset):
         caption_path2 = os.path.join(root, f"{mode}2.csv")
         self.captions_df2 = pd.read_csv(caption_path2)
 
+        # self.captions_df = pd.concat([self.captions_df, self.captions_df2], axis=0)
+
         self.transform = image_transform
         self.tokenizer = text_tokenizer
 

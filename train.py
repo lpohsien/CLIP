@@ -9,6 +9,7 @@ import torch.optim as optim
 import torch.cuda
 import torch.optim.lr_scheduler as lr_scheduler
 
+
 # Config parsing
 import yaml
 import argparse
@@ -33,12 +34,12 @@ OG_CONFIG_PATH = "./configs/vit-b32.yaml"
 SAVE_CHECKPOINT_DIR = "./checkpoints"
 # LOAD_CHECKPOINT_PATH = "./checkpoints/LiT-base_128_8.pth"
 LOAD_CHECKPOINT_PATH = None
-SAVE_CHECKPOINT = True
+SAVE_CHECKPOINT = False
 DO_TRAIN = True
-USE_OG_MODEL = False
+USE_OG_MODEL = True
 
 RUN_TYPE = "LiT"
-TRAIN_BATCH_SIZE = 128
+TRAIN_BATCH_SIZE = 256
 TRAINING_EPOCHS = 16
 LOG_DIR = f"./logs"
 USE_WANDB = True
@@ -70,12 +71,15 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device):
         optimizer.zero_grad()
         logits, _ = model(images, captions)
         loss = criterion(logits, device=device)
+        # logits, _, feature_i, feature_t = model(images, captions, mode="features")
+        # loss = criterion(feature_i, feature_t)
         # print(logits)
         # input()
         epoch_losses[i] = loss
         loss.backward()
         optimizer.step()
-        torch.clamp(model.logit_scale, -100, 100)
+        # Note: we clamp to 4.6052 = ln(100), as in the original paper.
+        torch.clamp(model.logit_scale, 0, 4.6052)
         if USE_WANDB:
             wandb.log({"loss": loss.item(), "logits": logits})
         total_loss += loss
@@ -219,7 +223,7 @@ if __name__ == "__main__":
     clip_model.freeze_image_encoder()
 
     if USE_WANDB:
-        wandb.init(project="clip-multicaption", name=RUN_NAME, mode="offline")
+        wandb.init(project="clip-multicaption", name=RUN_NAME)
         wandb.config.update(config)
         wandb.watch(clip_model.transformer, log="all", log_freq=10)
             
@@ -231,6 +235,9 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_set, batch_size=TRAIN_BATCH_SIZE, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_set, batch_size=256, shuffle=False, drop_last=True)
     bench_loader = DataLoader(val_set, batch_size=256, shuffle=False, drop_last=True)
+
+    print("Trainining set size (Total sample count // Batch size) :", len(train_loader))
+    print("Validation set size (Total sample count // Batch size) :", len(val_loader))
 
     # 3b. Train on only a subset of the data (Testing only)
     # subset_indices = subset_indices = list(range(0, 1600))
@@ -244,6 +251,8 @@ if __name__ == "__main__":
         eps=float(config.get("adam_epsilon")),
         lr=config.get("lr"),
         weight_decay=config.get("weight_decay")
+        # lr=3.2e-5,
+        # weight_decay=3.1e-3
     )
     if LOAD_CHECKPOINT_PATH and os.path.exists(LOAD_CHECKPOINT_PATH.replace(".pth", "-optim.pth")):
         optimizer.load_state_dict(torch.load(LOAD_CHECKPOINT_PATH.replace(".pth", "-optim.pth"), weights_only=True))
@@ -270,8 +279,8 @@ if __name__ == "__main__":
             if epoch % 2 == 0:
                 eval_loss = eval(clip_model, val_loader, clip.clip.InfoNCELoss, device)
                 eval_losses = np.append(eval_losses, eval_loss)
+                print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Eval): {eval_loss}")
                 if SAVE_CHECKPOINT:
-                    print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Eval): {eval_loss}")
                     if eval_loss < min_loss and epoch > 0: # Don't save the first epoch
                         min_loss = eval_loss
                         save_checkpoint(clip_model, optimizer)

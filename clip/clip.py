@@ -266,4 +266,68 @@ def InfoNCELoss(logits, device="cpu"):
     loss_i = F.cross_entropy(logits, labels)
     loss_t = F.cross_entropy(logits.T, labels)
     loss = (loss_i + loss_t)/2
+
+    # negative sample loss
+    logits[torch.eye(logits.shape[0]).bool()] = 0
+    neg_loss_i = torch.logsumexp(logits, dim=1).mean()
+    neg_loss_t = torch.logsumexp(logits, dim=0).mean()
+    neg_loss = (neg_loss_i + neg_loss_t)/2
+
+    return loss + neg_loss
+
+
+def NegativeSampleLoss(logits, device="cpu"):
+    '''
+    InfoNCE loss function for contrastive learning
+    logit_matrix: a tensor of shape (batch_size, batch_size)
+    '''
+    labels = torch.arange(logits.shape[0]).to(device)
+    loss_i = F.cross_entropy(logits, labels)
+    loss_t = F.cross_entropy(logits.T, labels)
+    loss = (loss_i + loss_t)/2
+
+    # negative sample loss
+    logits[torch.eye(logits.shape[0]).bool()] = 0
+    neg_loss_i = torch.logsumexp(logits, dim=1).mean()
+    neg_loss_t = torch.logsumexp(logits, dim=0).mean()
+    neg_loss = (neg_loss_i + neg_loss_t)/2
+
+    return loss + neg_loss
+
+def SigLoss(logits, device="cpu"):
+    n = logits.shape[0]
+    labels = 2 * torch.eye(n, device=device) - torch.ones(n, device=device) # -1 with diagonal 1
+    return -F.sigmoid(logits * labels).log().mean(dim=None)
+
+# Taken from VICReg repo: https://github.com/facebookresearch/vicreg/blob/main/main_vicreg.py#L239
+def off_diagonal(x):
+    n, m = x.shape
+    assert n == m
+    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
+
+def VICRegLoss(x, y, _lambda=25, _mu=25, _nu=1):
+    eps = 0.0001
+    batch_size, num_features = x.shape
+    assert x.shape == y.shape
+
+    # Invariance loss
+    repr_loss = F.mse_loss(x, y) # MSE loss between embedding vectors
+
+    # Variance loss (Batch)
+    x = x - x.mean(dim=0)
+    y = y - y.mean(dim=0)
+    std_x = torch.sqrt(x.var(dim=0) + eps)
+    std_y = torch.sqrt(y.var(dim=0) + eps)
+    std_loss = torch.mean(F.relu(1 - std_x)) / 2 + torch.mean(F.relu(1 - std_y)) / 2
+
+    cov_x = (x.T @ x) / (batch_size - 1)
+    cov_y = (y.T @ y) / (batch_size - 1)
+    cov_loss = off_diagonal(cov_x).pow_(2).sum().div(num_features) + off_diagonal(cov_y).pow_(2).sum().div(num_features)
+
+    loss = (
+        _lambda * repr_loss
+        + _mu * std_loss
+        + _nu * cov_loss
+    )
     return loss
