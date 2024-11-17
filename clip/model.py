@@ -254,7 +254,8 @@ class CLIP(nn.Module):
                  vocab_size: int,
                  transformer_width: int,
                  transformer_heads: int,
-                 transformer_layers: int
+                 transformer_layers: int,
+                 bias: bool = False
                  ):
         super().__init__()
 
@@ -293,12 +294,26 @@ class CLIP(nn.Module):
         self.ln_final = LayerNorm(transformer_width)
 
         self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1/0.07))
+
+        if bias:
+            self.logit_scale =  nn.Parameter(torch.ones([]) * np.log(50))
+            self.bias = nn.Parameter(torch.ones([]) * -10)
+        else:
+            self.bias = None
 
         self.initialize_parameters()
 
-    def initialize_parameters(self, mode="both"):
+    def initialize_parameters(self, mode="both", use_bias: bool = False):
         assert mode in ["image_encoder", "text_encoder", "both"]
+
+        if self.bias is not None or use_bias:
+            print("Using bias")
+            self.logit_scale = nn.Parameter(torch.ones([]) * np.log(28))
+            self.bias = nn.Parameter(torch.ones([]) * -10)
+        else:
+            self.logit_scale = nn.Parameter(torch.ones([]) * np.log(100))
+
         # Initialize the vision encoder
         if mode == 'image_encoder' or mode == 'both':
             if isinstance(self.visual, ModifiedResNet):
@@ -414,7 +429,10 @@ class CLIP(nn.Module):
 
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp()
-        logits_per_image = logit_scale * image_features @ text_features.t() # image x text
+        if self.bias is not None:
+            logits_per_image = logit_scale * image_features @ text_features.t() + self.bias
+        else:
+            logits_per_image = logit_scale * image_features @ text_features.t() # image x text
         logits_per_text = logits_per_image.t() # text x image
 
         if mode == "features":

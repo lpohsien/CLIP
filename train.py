@@ -2,13 +2,15 @@ from data.multicaption_dataset import MulticaptionDataset
 
 import clip
 from clip.model import CLIP
+from clip.model import Transformer
+from clip.model import convert_weights 
 
 from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import torch.cuda
 import torch.optim.lr_scheduler as lr_scheduler
-
+from lion_pytorch import Lion
 
 # Config parsing
 import yaml
@@ -38,7 +40,7 @@ SAVE_CHECKPOINT = False
 DO_TRAIN = True
 USE_OG_MODEL = True
 
-RUN_TYPE = "LiT"
+RUN_TYPE = "1Layer"
 TRAIN_BATCH_SIZE = 256
 TRAINING_EPOCHS = 16
 LOG_DIR = f"./logs"
@@ -71,17 +73,17 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device):
         optimizer.zero_grad()
         logits, _ = model(images, captions)
         loss = criterion(logits, device=device)
+        #VICReg
         # logits, _, feature_i, feature_t = model(images, captions, mode="features")
         # loss = criterion(feature_i, feature_t)
         # print(logits)
-        # input()
         epoch_losses[i] = loss
         loss.backward()
         optimizer.step()
         # Note: we clamp to 4.6052 = ln(100), as in the original paper.
-        torch.clamp(model.logit_scale, 0, 4.6052)
+        # torch.clamp(model.logit_scale, 0, 4.6052)
         if USE_WANDB:
-            wandb.log({"loss": loss.item(), "logits": logits})
+            wandb.log({"loss": loss.item(), "logits": logits, "logit_scale": model.logit_scale.item()})
         total_loss += loss
         if device == "cuda":
             torch.cuda.empty_cache()
@@ -218,8 +220,14 @@ if __name__ == "__main__":
                     transformer_heads=config.get("text").get("n_heads"),
                     transformer_layers=config.get("text").get("n_layers"),
                 ).to(device)
-            
-    clip_model.initialize_parameters(mode="text_encoder")
+
+    # clip_model.transformer = Transformer(
+    #     width=config.get("text").get("width"),
+    #     heads=config.get("text").get("n_heads"),
+    #     layers=12,
+    #     attn_mask=clip_model.build_attention_mask()).to(device)
+    convert_weights(clip_model.transformer)
+    clip_model.initialize_parameters(mode="text_encoder", use_bias=False)
     clip_model.freeze_image_encoder()
 
     if USE_WANDB:
@@ -245,22 +253,31 @@ if __name__ == "__main__":
     # train_loader = DataLoader(subset_train_set, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
 
     # 4. Define loss and optimizer
-    optimizer = optim.AdamW(
+    optimizer = optim.Adam(
         clip_model.parameters(),
         betas=(config.get("adam_beta1"), config.get("adam_beta2")),
         eps=float(config.get("adam_epsilon")),
         lr=config.get("lr"),
         weight_decay=config.get("weight_decay")
-        # lr=3.2e-5,
-        # weight_decay=3.1e-3
     )
+
+    # SigLiT
+    # optimizer = Lion(
+    #     clip_model.parameters(),
+    #     lr=1e-3,
+    #     weight_decay=1e-4,
+    #     betas=(0.9, 0.95),
+    # )
+
+    # optimizer = clip.clip.LARS(clip_model.parameters(), lr=0.2, weight_decay=1e-6)
+
     if LOAD_CHECKPOINT_PATH and os.path.exists(LOAD_CHECKPOINT_PATH.replace(".pth", "-optim.pth")):
         optimizer.load_state_dict(torch.load(LOAD_CHECKPOINT_PATH.replace(".pth", "-optim.pth"), weights_only=True))
         print(f"Optimizer state loaded from {LOAD_CHECKPOINT_PATH.replace('.pth', '-optim.pth')}")
 
     warmup_scheduler = lr_scheduler.LinearLR(optimizer, start_factor=0.1, total_iters=5)
-    cosine_scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=TRAINING_EPOCHS - 5)
-    scheduler = lr_scheduler.SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
+    # cosine_scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
+    # scheduler = lr_scheduler.SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
 
     # 5. Train the model
     if DO_TRAIN:
@@ -269,7 +286,7 @@ if __name__ == "__main__":
         min_loss = float("inf")
         for epoch in range(TRAINING_EPOCHS):
             training_loss, epoch_losses = train_one_epoch(clip_model, train_loader, optimizer, clip.clip.InfoNCELoss, device)
-            scheduler.step()
+            warmup_scheduler.step()
             print(f"Epoch {epoch + 1} | Average InfoNCE Loss (Training): {training_loss}")
             train_losses = np.append(train_losses, epoch_losses.cpu().detach().numpy())
 
