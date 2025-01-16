@@ -18,7 +18,7 @@ try:
     from torchvision.transforms import InterpolationMode
     BICUBIC = InterpolationMode.BICUBIC
 except ImportError:
-    BICUBIC = Image.BICUBIC
+    BICUBIC = Image.Resampling.BICUBIC
 
 
 if version.parse(torch.__version__) < version.parse("1.7.1"):
