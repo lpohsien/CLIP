@@ -31,3 +31,14 @@ def benchmark(model, bench_loader, topk=1, device="cuda", final=False, wandb=Non
             plt.ylabel("images")
             plt.savefig(os.path.join(LOG_DIR, f"{RUN_NAME}-logits.png"))
     return recall_image, recall_text
+
+# Adpated from https://discuss.pytorch.org/t/how-do-i-check-the-number-of-parameters-of-a-model/4325/9
+def count_parameters(model, simplified=True):
+    res = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    if simplified:
+        if res > 1e6:
+            return f"{res/1e6:.2f}M"
+        elif res > 1e3:
+            return f"{res/1e3:.2f}K"
+        else:
+            return res
