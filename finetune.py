@@ -4,7 +4,7 @@ import clip
 from clip.model import CLIP
 from clip.model import Transformer
 from clip.model import convert_weights 
-from clip.utils import benchmark
+from utils import benchmark
 
 from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader

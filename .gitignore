@@ -10,6 +10,7 @@ __pycache__/
 checkpoints/*
 logs/*
 wandb/*
+collected_data/*
 
 thumbs.db
 .DS_Store

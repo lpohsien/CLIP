@@ -6,16 +6,15 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
 class PrecomputationDataset(Dataset):
-    def __init__(self, data_dir, mode="train", group="0"):
+    def __init__(self, data_dir, csv_filename="train0"):
         self.data_dir = data_dir
-        assert mode in ["train", "val"], "mode should be either 'train' or 'val'"
 
         # load images
         self.images_dir = os.path.join(data_dir, 'images')
         print(self.images_dir)
         
         #load captions
-        caption_path = os.path.join(data_dir, f"{mode}{group}.csv")
+        caption_path = os.path.join(data_dir, f"{csv_filename}.csv")
         self.captions_df = pd.read_csv(caption_path, delimiter=">", header=None)
         print("Number of captions:", len(self.captions_df))
         print(self.captions_df.head(10))
