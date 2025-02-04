@@ -28,10 +28,10 @@ class EmbedDataset(Dataset):
 
 
         self.img_embed_dir = img_embed_dir if img_embed_dir is not None else data_dir
-        embed_file_path = os.path.join(self.img_embed_dir, f"{csv_file}_std_img_mbd.pt")
+        embed_file_path = os.path.join(self.img_embed_dir, f"{csv_file}_img_mbd.pt")
         if not os.path.exists(embed_file_path):
             raise FileNotFoundError(f"Image embeddings file {embed_file_path} not found")
-        self.image_embeds = torch.load(embed_file_path)
+        self.image_embeds = torch.load(embed_file_path, weights_only=True)
         self.preprocessor = preprocessor
         self.context_length = context_length
 

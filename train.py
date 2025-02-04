@@ -60,7 +60,7 @@ def recall_at_k(logits, k=1, dim=1):
     if dim == 1:
         true_labels = true_labels.t()
     correct = top_k == true_labels    
-    return correct.sum(dim=dim).float().mean().item() * 100.0
+    return correct.sum(dim=dim).float().mean().item()
 
 
 # train the model using InfoNCE loss

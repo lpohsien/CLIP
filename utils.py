@@ -32,7 +32,7 @@ def clip_loss(similarity: torch.Tensor) -> torch.Tensor:
 def recall_at_k(logits: torch.Tensor, k=1, dim=1) -> float:
     ''' 
         Compute the recall at k for a batch of logits.
-        dim=1 performs top-k along the rows, dim=0 along the columns.
+        dim=1 performs top-k along each row, dim=0 along each column.
     '''
     assert len(logits.shape) == 2, "Logits must be 2D"
     _, top_k = logits.topk(k, dim=dim)
@@ -42,22 +42,24 @@ def recall_at_k(logits: torch.Tensor, k=1, dim=1) -> float:
     correct = top_k == true_labels    
     return correct.sum(dim=dim).float().mean().item() * 100.0
 
-def rowwise_top_k_binary(matrix, k):
+def boost_top_k(matrix, k, dim=1) -> torch.Tensor:
     """
     Convert a matrix to binary based on the row-wise top-k elements using PyTorch.
 
     Parameters:
         matrix (torch.Tensor): Input 2D tensor.
         k (int): Number of top elements to assign 1 in each row.
+        dim (int): Dimension along which to perform the top-k operation. 
+            dim=1 performs top-k along the rows, dim=0 along the columns.
+            default: 1
 
     Returns:
         torch.Tensor: Transformed binary matrix of the same dimensions.
     """
-    _, top_k_indices = torch.topk(matrix, k, dim=1)
-    binary_matrix = torch.zeros_like(matrix, dtype=torch.float)
-    binary_matrix.scatter_(1, top_k_indices, 100)
+    _, top_k_indices = torch.topk(matrix, k, dim=dim)
+    matrix.scatter_(dim, top_k_indices, 1.0)
 
-    return binary_matrix
+    return matrix
 
 
 # Adpated from:
@@ -94,52 +96,57 @@ def check_memory_usage(threshold=15):
 
     return precent_free_ram, precent_free_vram
 
-
-def plot_heatmap(probs, 
-                 images, 
-                 text, 
-                 model_name="unknown", 
-                 output_mode="none",
-                 save_dir=dirname(abspath(__file__)),
-                 fit_to_text=False):
-    
+# Adapted from:
+# https://github.com/openai/CLIP/blob/main/notebooks/Interacting_with_CLIP.ipynb
+def plot_heatmap(similarity,
+                    images,
+                    texts,
+                    title_class="Image retrieval probility",
+                    model_name="unknown",
+                    output_mode="none",
+                    save_dir=dirname(abspath(__file__)),
+                    fit_to_text=True):
     assert output_mode in ["show", "save", "both", "none"], \
         "Invalid output mode! Only 'none', 'show', 'save', and 'both' are allowed."
-    # Create a figure and axis
-    _, ax = plt.subplots(figsize=(8, 6))
+    assert similarity.shape[0] == len(texts), "Number of texts should match the similarity matrix"
+    assert similarity.shape[1] == len(images), "Number of images should match the similarity matrix"
+    texts_count = len(texts)
+    images_count = len(images)
 
-    # Plot the probability matrix using coolwarm colormap
-    im = ax.imshow(probs, cmap="coolwarm", aspect="auto", vmin=0, vmax=100)
+    plt.figure(figsize=(max(20, images_count * 3.0), max(14, texts_count * 1.0)))
+    if similarity.shape[0] == similarity.shape[1]:
+        plt.imshow(torch.eye(similarity.shape[0]))
+        plt.imshow(similarity, vmin=0.1, vmax=0.3, alpha=0.75)
+    else:
+        plt.imshow(similarity)
+    plt.colorbar(label="Probability")
+    plt.yticks(range(texts_count), texts, fontsize=18)
+    plt.xticks([])
+    for i, image in enumerate(images):
+        image = Image.open(image)
+        plt.imshow(image, extent=(i - 0.5, i + 0.5, -1.6, -0.6), origin="lower")
+    for x in range(similarity.shape[1]):
+        for y in range(similarity.shape[0]):
+            plt.text(x, y, f"{similarity[y, x]:.2f}", ha="center", va="center", size=12)
 
-    # Customize the axis labels
-    ax.set_yticks(range(len(images)))
-    ax.set_yticklabels([])  # Hide default y-axis labels (we'll use images instead)
-    ax.set_xticks(range(len(text)))
-    ax.set_xticklabels(text, rotation=20, ha="right")  # Rotate text labels for better readability
+    for side in ["left", "top", "right", "bottom"]:
+        plt.gca().spines[side].set_visible(False)
 
-    # Add image thumbnails as y-axis labels
-    for i, image_path in enumerate(images):
-        # Load the image and create an OffsetImage
-        img = Image.open(image_path)
-        img.thumbnail((60, 60))  # Resize for the thumbnail
-        offset_img = OffsetImage(img, zoom=1.0)
+    plt.xlim([-0.5, images_count - 0.5])
+    plt.ylim([texts_count + 0.5, -2])
 
-        # Create an AnnotationBbox for the image
-        ab = AnnotationBbox(offset_img, (-0.5, i), frameon=False, box_alignment=(1.0, 0.5))
-        ax.add_artist(ab)
+    plt.title(f"{title_class} for {model_name}", fontsize=60)
 
-    # Add a colorbar
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.1)
-    plt.colorbar(im, cax=cax, label="Probability")
-
-    # Adjust layout and display the plot
-    plt.tight_layout()
-
+    if output_mode in ["save", "both"]:
+        title_class = title_class.replace(" ", "_")
+        if fit_to_text:
+            plt.savefig(join(save_dir, 
+                             f"{title_class.replace(" ", "_")}_heatmap_{model_name}.png"), bbox_inches="tight")
+        else:
+            plt.savefig(join(save_dir, 
+                             f"{title_class.replace(" ", "_")}_heatmap_{model_name}.png"))
     if output_mode in ["show", "both"]:
         plt.show()
-    if output_mode in ["save", "both"]:
-        if fit_to_text:
-            plt.savefig(join(save_dir, f"heatmap_{model_name}.png"), bbox_inches="tight")
-        else:
-            plt.savefig(join(save_dir, f"heatmap_{model_name}.png"))
+
+matrix = torch.Tensor([[1, 2, 8], 
+                       [3, 4, 3]])
