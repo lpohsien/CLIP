@@ -103,12 +103,12 @@ class CLIPModelModifier:
         )
         train_dataset = EmbedDataset(data_root_dir, 
                                      img_embed_dir=dirname(abspath(__file__)),
-                                     csv_file="train0", 
+                                     csv_file="train", 
                                      preprocessor=self.processor,
                                      context_length=self.context_length)
         eval_dataset = EmbedDataset(data_root_dir, 
                                     img_embed_dir=dirname(abspath(__file__)),
-                                    csv_file="val0", 
+                                    csv_file="val", 
                                     preprocessor=self.processor,
                                     context_length=self.context_length)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)

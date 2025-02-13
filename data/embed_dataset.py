@@ -6,7 +6,7 @@ import torch
 
 
 class EmbedDataset(Dataset):
-    def __init__(self, data_dir, img_embed_dir=None, csv_file="train0", preprocessor=None, context_length=77):
+    def __init__(self, data_dir, img_embed_dir=None, csv_file="train", preprocessor=None, context_length=77):
         '''
             data_dir: directory containing images and captions
             img_embed_dir: directory containing image embeddings

@@ -8,6 +8,7 @@ __pycache__/
 *.pt
 *.venus01
 checkpoints/*
+sample_images/*
 logs/*
 wandb/*
 collected_data/*

@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
 class PrecomputationDataset(Dataset):
-    def __init__(self, data_dir, csv_filename="train0"):
+    def __init__(self, data_dir, csv_filename="train"):
         self.data_dir = data_dir
 
         # load images

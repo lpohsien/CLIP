@@ -18,7 +18,7 @@ import torch.optim as optim
 torch.manual_seed(0)
 
 DEFAULT_BASE_MODEL_ID = "openai/clip-vit-large-patch14"
-DEFAULT_DATA_ROOT_DIR = "/home/phli/genAI/data_collection/data"
+DEFAULT_DATA_ROOT_DIR = "./collected_data"
 
 DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -86,7 +86,7 @@ class CLIPLoRABenchmarkRunner:
 
         benchmark_dataset = EmbedDataset(data_root_dir, 
                                                 img_embed_dir=img_embed_dir,
-                                                csv_file="val0", 
+                                                csv_file="val", 
                                                 preprocessor=self.processor,
                                                 context_length=self.context_length)
         self.benchmark_size = len(benchmark_dataset)
@@ -348,30 +348,30 @@ class CLIPLoRABenchmarkRunner:
             return res
 
 
-DEFAULT_CHECKPOINT_DIR = "/home/phli/genAI/CLIP/checkpoints"
+DEFAULT_CHECKPOINT_DIR = "./checkpoints"
 
-# lora_finetune = CLIPModelModifier(train_projection=True)
-# lora_finetune.setupTrainer()
-# lora_finetune.train()
-# del lora_finetune
+lora_finetune = CLIPModelModifier(train_projection=True)
+lora_finetune.setupTrainer()
+lora_finetune.train()
+del lora_finetune
 
-# lora_finetune = CLIPModelModifier(train_projection=False)
-# lora_finetune.setupTrainer()
-# lora_finetune.train()
-# del lora_finetune
+lora_finetune = CLIPModelModifier(train_projection=False)
+lora_finetune.setupTrainer()
+lora_finetune.train()
+del lora_finetune
 
-models = ["text_lora-finetuned", "text_projection_lora-finetuned"]
-models = [join(DEFAULT_CHECKPOINT_DIR, model) for model in models]
+# models = ["text_lora-finetuned", "text_projection_lora-finetuned"]
+# models = [join(DEFAULT_CHECKPOINT_DIR, model) for model in models]
 
-runner = CLIPLoRABenchmarkRunner(models=models)
-final_results = runner.run_adapters()
-baseline_results = runner.run_baseline()
-final_results.append(baseline_results)
+# runner = CLIPLoRABenchmarkRunner(models=models)
+# final_results = runner.run_adapters()
+# baseline_results = runner.run_baseline()
+# final_results.append(baseline_results)
 
-df = pd.DataFrame(final_results)
-columns = [df.columns[-1]] + list(df.columns[:-1])
-df = df[columns]
-del df["probs"]
-pd.set_option("display.max_columns", None)
-print(df)
+# df = pd.DataFrame(final_results)
+# columns = [df.columns[-1]] + list(df.columns[:-1])
+# df = df[columns]
+# del df["probs"]
+# pd.set_option("display.max_columns", None)
+# print(df)
 

@@ -1,16 +1,28 @@
 #!/bin/bash
-#PBS -P volta_pilot
-#PBS -j oe
-#PBS -N LiT
+#PBS -P CLIPSensorEncoding
 #PBS -q volta_gpu
-#PBS -l select=1:ncpus=5:mem=50gb:ngpus=1
-#PBS -l walltime=24:00:00
+#PBS -l select=1:ncpus=5:ngpus=1
+#PBS -j oe
+#PBS -N CLIPSensorEncodingRun1
 
 cd $PBS_O_WORKDIR;
 np=$(cat ${PBS_NODEFILE} | wc -l);
 
 module load singularity
 image="/app1/common/singularity-img/3.0.0/pytorch_2.0_cuda_12.0_cudnn8-devel_u22.04.sif"
+# image="/app1/common/singularity-img/hopper/pytorch/pytorch_2.4.0a0-cuda_12.5.0_ngc_24.06.sif"
+
+
+echo "Running on $(hostname) with $np cores and $CUDA_VISIBLE_DEVICES GPUs";
+
+# cd /hpctmp/e0268113/CLIP
+# singularity exec $image bash << EOF > stdout.$PBS_JOBID 2> stderr.$PBS_JOBID
+
+#     python /hpctmp/e0268113/CLIP/benchmark.py
+
+# EOF
+
+
 
 # for i in 1024 512 256 128 64 32 16;
 # do
@@ -25,15 +37,15 @@ image="/app1/common/singularity-img/3.0.0/pytorch_2.0_cuda_12.0_cudnn8-devel_u22
 # EOF
 # done
 
-singularity exec $image bash << EOF > stdout.$PBS_JOBID 2> stderr.$PBS_JOBID
+# singularity exec $image bash << EOF > stdout.$PBS_JOBID 2> stderr.$PBS_JOBID
 
-python train.py --dataset_root='/hpctmp/e0268113/datasets/flickr8k' \
-                --save_checkpoint_dir='/hpctmp/e0268113/checkpoints' \
-                --load_checkpoint_path='/hpctmp/e0268113/checkpoints/ViT-B-32.pth' \
-                --train_batch_size=128 \
-                --training_epochs=16
+# python train.py --dataset_root='/hpctmp/e0268113/datasets/flickr8k' \
+#                 --save_checkpoint_dir='/hpctmp/e0268113/checkpoints' \
+#                 --load_checkpoint_path='/hpctmp/e0268113/checkpoints/ViT-B-32.pth' \
+#                 --train_batch_size=128 \
+#                 --training_epochs=16
 
-EOF
+# EOF
 
 # singularity exec $image bash << EOF > stdout.$PBS_JOBID 2> stderr.$PBS_JOBID
 

@@ -13,7 +13,7 @@ torch.set_printoptions(sci_mode=False, precision=4, linewidth=200)
 torch.manual_seed(0)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 image_group = 0
-dataset_mode = "val"
+dataset_mode = "train"
 
 model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
 model.to(device)
@@ -42,14 +42,31 @@ questions = [
         ""
 ]
 
-
-csv_filename = "val0"
-
+DO_PRECOMPUTE = True
+csv_filename = "val"
+BATCH_SIZE = 100
 precompute_dataset = PrecomputationDataset("/home/phli/genAI/data_collection/data", 
                                            csv_filename=csv_filename)
 precompute_loader = DataLoader(precompute_dataset, 
-                               batch_size=10, 
+                               batch_size=BATCH_SIZE, 
+                               drop_last=False,
                                shuffle=False) # Shuffle must be set to false to
+
+print(f"Dataset csv: {csv_filename}.csv")
+print("Dataset length:", len(precompute_dataset))
+print("Expected number of iterations: ~", len(precompute_dataset) // BATCH_SIZE + 1)
+do_proceed = input("Proceed? Input `precompute` to proceed with precomputing or `eval` to preview precomputed embeddings: ") 
+if do_proceed.lower() == "eval":
+    print("Evaluating...")
+    DO_PRECOMPUTE = False
+elif do_proceed.lower() == "precompute":
+    print("Precomputing...")
+    DO_PRECOMPUTE = True
+else:
+    print("None of `precompute` or `eval` selected! Exiting...")
+    exit()
+
+
 
 
 @torch.no_grad()
@@ -78,59 +95,63 @@ def compute_img_embeds(inputs):
     return image_embeds
 
 
+########################
+### Main Computation ###
+########################
+if DO_PRECOMPUTE:
+    global_image_embeds = None
+    global_baseline_prediciton = None
+
+    with torch.no_grad():
+        for i, img in tqdm(enumerate(precompute_loader)):
+            # Preprocess text and image
+            inputs = processor(text=questions, images=img, return_tensors="pt", padding=True, do_rescale=False)
+            inputs = {name: tensor.to(device) for name, tensor in inputs.items()}
+
+            
+            text_embeds = model.get_text_features(input_ids=inputs["input_ids"])
+            text_embeds = text_embeds / text_embeds.norm(p=2, dim=-1, keepdim=True)
+            
+            image_embeds = model.get_image_features(pixel_values=inputs["pixel_values"])
+            image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
+
+            logits_per_image = (torch.matmul(text_embeds, 
+                                            image_embeds.t().to(text_embeds.device)) \
+                                        * model.logit_scale.exp().to(text_embeds.device)).t()
+
+            if global_image_embeds is None:
+                global_image_embeds = image_embeds
+                global_baseline_prediciton = logits_per_image
+            else:
+                global_image_embeds = torch.cat((global_image_embeds, image_embeds), dim=0)
+                global_baseline_prediciton = torch.cat((global_baseline_prediciton, logits_per_image), dim=0)
 
 
-global_image_embeds = None
-global_baseline_prediciton = None
+            probs = torch.nn.functional.softmax(logits_per_image, dim=1)
 
-with torch.no_grad():
-    for i, img in tqdm(enumerate(precompute_loader)):
-        # Preprocess text and image
-        inputs = processor(text=questions, images=img, return_tensors="pt", padding=True, do_rescale=False)
-        inputs = {name: tensor.to(device) for name, tensor in inputs.items()}
+            print(probs)
+            print(probs.sum(dim=1))
 
-        
-        text_embeds = model.get_text_features(input_ids=inputs["input_ids"])
-        text_embeds = text_embeds / text_embeds.norm(p=2, dim=-1, keepdim=True)
-        
-        image_embeds = model.get_image_features(pixel_values=inputs["pixel_values"])
-        image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
-
-        logits_per_image = (torch.matmul(text_embeds, 
-                                        image_embeds.t().to(text_embeds.device)) \
-                                    * model.logit_scale.exp().to(text_embeds.device)).t()
-
-        if global_image_embeds is None:
-            global_image_embeds = image_embeds
-            global_baseline_prediciton = logits_per_image
-        else:
-            global_image_embeds = torch.cat((global_image_embeds, image_embeds), dim=0)
-            global_baseline_prediciton = torch.cat((global_baseline_prediciton, logits_per_image), dim=0)
+            print(probs.shape)
 
 
-        probs = torch.nn.functional.softmax(logits_per_image, dim=1)
-
-        print(probs)
-        print(probs.sum(dim=1))
-
-        print(probs.shape)
+            # Check that the probabilities are the same as the original calculation
+            assert torch.allclose(probs, original_prob_calculation(inputs))
+            print("All good!")
 
 
-        # Check that the probabilities are the same as the original calculation
-        assert torch.allclose(probs, original_prob_calculation(inputs))
-        print("All good!")
+            # if i == 0:  
+            #     break
 
-
-        # if i == 0:  
-        #     break
-
-# global_mean_embed = global_image_embeds.mean(dim=0, keepdim=True)
-# normalized_embeds = global_image_embeds - global_mean_embed
-normalized_embeds = global_image_embeds
-output_path = f"{csv_filename}_std_img_mbd.pt"
-torch.save(normalized_embeds, output_path)
-print(f"Saved {normalized_embeds.shape[0]} embeddings to {output_path}")
-torch.cuda.empty_cache()
+    # global_mean_embed = global_image_embeds.mean(dim=0, keepdim=True)
+    # normalized_embeds = global_image_embeds - global_mean_embed
+    normalized_embeds = global_image_embeds
+    output_path = f"{csv_filename}_img_mbd.pt"
+    torch.save(normalized_embeds, output_path)
+    print(f"Saved {normalized_embeds.shape[0]} embeddings to {output_path}")
+    torch.cuda.empty_cache()
+else:
+    output_path = f"{csv_filename}_img_mbd.pt"
 
 
 
@@ -138,7 +159,7 @@ torch.cuda.empty_cache()
 ### Load the standardized embeddings and test the model ###
 ############################################################
 
-sample_tensors = torch.load(output_path, weights_only=True)[:5]
+sample_tensors = torch.load(output_path, weights_only=True)[:10]
 print("Loaded tensor", sample_tensors.shape)
 
 
@@ -165,5 +186,5 @@ with torch.no_grad():
 
     # print(probs.shape)
 
-    images = precompute_dataset.get_image_paths(0, 5)
+    images = precompute_dataset.get_image_paths(0, 10)
     plot_heatmap(logits_per_image.cpu().round(decimals=2), images, questions, output_mode="show")
