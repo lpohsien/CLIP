@@ -1,7 +1,7 @@
 # Description: Configuration file for mini-ViT model
 
 # Training configuration
-batch_size: 10
+batch_size: 30
 num_epochs: 10
 max_temp: 100.0
 weight_decay: 0.2

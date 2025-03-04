@@ -63,7 +63,7 @@ class CLIPTrainer:
                  overwrite_exisintg_checkpoint=True,                
                  loss_fn=clip_loss,
                  compute_metrics=recall_at_k,
-                 metric_eval_func=best_eval_loss,
+                 metric_eval_func=best_eval_recall,
                  num_epochs=10,
                  use_wandb=False,
                  device=DEFAULT_DEVICE):

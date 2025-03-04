@@ -22,27 +22,50 @@ DEFAULT_DATA_ROOT_DIR = "./collected_data"
 
 DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+# DEFAULT_QUESTIONS = [
+#     "a photo taken in the day",
+#         "a photo taken at night",
+#         "a photo taken in the day",
+#         "a photo taken at night",
+#     "a photo taken when it is raining",
+#         "a photo taken when it is cloudy",
+#         "a photo taken when it is partly cloudy",
+#         "a photo taken when it is sunny",
+#     "a photo taken when it is windy",
+#         "a photo taken when it is calm",
+#         "",
+#         "",
+#     "a photo taken when it is humid",
+#         "a photo taken when it is dry",
+#         "",
+#         "",
+#     "a photo taken on a monday",
+#         "a photo taken on a tuesday",
+#         "a photo taken on a wednesday",
+#         ""
+# ]
+
 DEFAULT_QUESTIONS = [
     "a photo taken in the day",
         "a photo taken at night",
-        "",
-        "",
-    "a photo taken when it is raining",
+        "a photo taken in the day",
+        "a photo taken at night",
+    "a photo taken when it is cloudy",
         "a photo taken when it is cloudy",
-        "a photo taken when it is partly cloudy",
-        "a photo taken when it is sunny",
+        "a photo taken when it is not cloudy",
+        "a photo taken when it is not cloudy",
     "a photo taken when it is windy",
         "a photo taken when it is calm",
-        "",
-        "",
+        "a photo taken when it is windy",
+        "a photo taken when it is calm",
     "a photo taken when it is humid",
         "a photo taken when it is dry",
-        "",
-        "",
+        "a photo taken when it is dry",
+        "a photo taken when it is humid",
     "a photo taken on a monday",
         "a photo taken on a tuesday",
         "a photo taken on a wednesday",
-        ""
+        "a photo taken on a thursday"
 ]
 
 def col_partial_argmax(logits: torch.Tensor, 
@@ -71,7 +94,7 @@ class CLIPLoRABenchmarkRunner:
 
     def __init__(self, 
                  data_root_dir=DEFAULT_DATA_ROOT_DIR,
-                 img_embed_dir=dirname(abspath(__file__)),
+                 img_embed_dir=join(dirname(abspath(__file__)), "collected_data"),
                  baseline_model=DEFAULT_BASE_MODEL_ID,
                  models=None,
                  device=DEFAULT_DEVICE):
@@ -86,7 +109,7 @@ class CLIPLoRABenchmarkRunner:
 
         benchmark_dataset = EmbedDataset(data_root_dir, 
                                                 img_embed_dir=img_embed_dir,
-                                                csv_file="val", 
+                                                csv_file="val30", 
                                                 preprocessor=self.processor,
                                                 context_length=self.context_length)
         self.benchmark_size = len(benchmark_dataset)
@@ -129,7 +152,7 @@ class CLIPLoRABenchmarkRunner:
 
         results.update(qn_eval_results)
         results.update({"model_name": "baseline"})
-        print("Baseline Results:", results)
+        # print("Baseline Results:", results)
         return results
     
     def run_adapters(self):
@@ -165,7 +188,7 @@ class CLIPLoRABenchmarkRunner:
 
             results.update(qn_eval_results)
             results.update({"model_name": adapter_name})
-            print(f"{adapter_name} Results:", results)
+            # print(f"{adapter_name} Results:", results)
             all_results.append(results)
         return all_results
             
@@ -350,28 +373,28 @@ class CLIPLoRABenchmarkRunner:
 
 DEFAULT_CHECKPOINT_DIR = "./checkpoints"
 
-lora_finetune = CLIPModelModifier(train_projection=True)
-lora_finetune.setupTrainer()
-lora_finetune.train()
-del lora_finetune
+# lora_finetune = CLIPModelModifier(train_projection=True)
+# lora_finetune.setupTrainer()
+# lora_finetune.train()
+# del lora_finetune
 
-lora_finetune = CLIPModelModifier(train_projection=False)
-lora_finetune.setupTrainer()
-lora_finetune.train()
-del lora_finetune
+# lora_finetune = CLIPModelModifier(train_projection=False)
+# lora_finetune.setupTrainer()
+# lora_finetune.train()
+# del lora_finetune
 
-# models = ["text_lora-finetuned", "text_projection_lora-finetuned"]
-# models = [join(DEFAULT_CHECKPOINT_DIR, model) for model in models]
+models = ["text_lora-finetuned", "text_lora-finetuned-small", "text_lora-finetuned-multi_group"]
+models = [join(DEFAULT_CHECKPOINT_DIR, model) for model in models]
 
-# runner = CLIPLoRABenchmarkRunner(models=models)
-# final_results = runner.run_adapters()
-# baseline_results = runner.run_baseline()
-# final_results.append(baseline_results)
+runner = CLIPLoRABenchmarkRunner(models=models)
+final_results = runner.run_adapters()
+baseline_results = runner.run_baseline()
+final_results.append(baseline_results)
 
-# df = pd.DataFrame(final_results)
-# columns = [df.columns[-1]] + list(df.columns[:-1])
-# df = df[columns]
-# del df["probs"]
-# pd.set_option("display.max_columns", None)
-# print(df)
+df = pd.DataFrame(final_results)
+columns = [df.columns[-1]] + list(df.columns[:-1])
+df = df[columns]
+del df["probs"]
+pd.set_option("display.max_columns", None)
+print(df)
 

@@ -8,7 +8,7 @@ from data.embed_dataset import EmbedDataset
 from trainer import CLIPTrainer
 import torch.optim as optim
 
-from os.path import dirname, abspath
+from os.path import dirname, abspath, join
 
 
 DEFAULT_CONFIG_PATH = "./configs/default.yaml"
@@ -102,18 +102,18 @@ class CLIPModelModifier:
             weight_decay=config.get("weight_decay")
         )
         train_dataset = EmbedDataset(data_root_dir, 
-                                     img_embed_dir=dirname(abspath(__file__)),
+                                     img_embed_dir=join(dirname(abspath(__file__)), "collected_data"),
                                      csv_file="train", 
                                      preprocessor=self.processor,
                                      context_length=self.context_length)
         eval_dataset = EmbedDataset(data_root_dir, 
-                                    img_embed_dir=dirname(abspath(__file__)),
+                                    img_embed_dir=join(dirname(abspath(__file__)), "collected_data"),
                                     csv_file="val", 
                                     preprocessor=self.processor,
                                     context_length=self.context_length)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         eval_loader = torch.utils.data.DataLoader(eval_dataset, 
-                                                  batch_size=len(eval_dataset), # Load all at once
+                                                  batch_size=len(eval_dataset)//4, # Load all at once
                                                   shuffle=False)
 
         

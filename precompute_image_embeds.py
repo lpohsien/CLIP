@@ -13,7 +13,7 @@ torch.set_printoptions(sci_mode=False, precision=4, linewidth=200)
 torch.manual_seed(0)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 image_group = 0
-dataset_mode = "train"
+dataset_mode = "val"
 
 model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
 model.to(device)
@@ -43,9 +43,9 @@ questions = [
 ]
 
 DO_PRECOMPUTE = True
-csv_filename = "val"
+csv_filename = dataset_mode
 BATCH_SIZE = 100
-precompute_dataset = PrecomputationDataset("/home/phli/genAI/data_collection/data", 
+precompute_dataset = PrecomputationDataset("./collected_data", 
                                            csv_filename=csv_filename)
 precompute_loader = DataLoader(precompute_dataset, 
                                batch_size=BATCH_SIZE, 
@@ -129,10 +129,9 @@ if DO_PRECOMPUTE:
 
             probs = torch.nn.functional.softmax(logits_per_image, dim=1)
 
-            print(probs)
-            print(probs.sum(dim=1))
-
-            print(probs.shape)
+            # print(probs)
+            # print(probs.sum(dim=1))
+            # print(probs.shape)
 
 
             # Check that the probabilities are the same as the original calculation
@@ -146,12 +145,12 @@ if DO_PRECOMPUTE:
     # global_mean_embed = global_image_embeds.mean(dim=0, keepdim=True)
     # normalized_embeds = global_image_embeds - global_mean_embed
     normalized_embeds = global_image_embeds
-    output_path = f"{csv_filename}_img_mbd.pt"
+    output_path = f"./collected_data/{csv_filename}_img_mbd.pt"
     torch.save(normalized_embeds, output_path)
     print(f"Saved {normalized_embeds.shape[0]} embeddings to {output_path}")
     torch.cuda.empty_cache()
 else:
-    output_path = f"{csv_filename}_img_mbd.pt"
+    output_path = f"./collected_data/{csv_filename}_img_mbd.pt"
 
 
 
