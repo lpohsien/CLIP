@@ -22,6 +22,9 @@ DEFAULT_DATA_ROOT_DIR = "./collected_data"
 
 DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+DEFAULT_BENCHDATASET = 'val30'
+DEFAULT_DO_PLOT_HEATMAP = True if DEFAULT_BENCHDATASET.endswith("30") else False
+
 # DEFAULT_QUESTIONS = [
 #     "a photo taken in the day",
 #         "a photo taken at night",
@@ -45,31 +48,44 @@ DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 #         ""
 # ]
 
+# DEFAULT_QUESTIONS = [
+#     "a photo taken in the day",
+#         "a photo taken at night",
+#         "a photo taken in the day",
+#         "a photo taken at night",
+#     "a photo taken when it is cloudy",
+#         "a photo taken when it is cloudy",
+#         "a photo taken when it is not cloudy",
+#         "a photo taken when it is not cloudy",
+#     "a photo taken when it is windy",
+#         "a photo taken when it is calm",
+#         "a photo taken when it is windy",
+#         "a photo taken when it is calm",
+#     "a photo taken when it is humid",
+#         "a photo taken when it is dry",
+#         "a photo taken when it is dry",
+#         "a photo taken when it is humid",
+#     "a photo taken on a monday",
+#         "a photo taken on a tuesday",
+#         "a photo taken on a wednesday",
+#         "a photo taken on a thursday"
+# ]
+
 DEFAULT_QUESTIONS = [
     "a photo taken in the day",
         "a photo taken at night",
-        "a photo taken in the day",
-        "a photo taken at night",
     "a photo taken when it is cloudy",
-        "a photo taken when it is cloudy",
-        "a photo taken when it is not cloudy",
-        "a photo taken when it is not cloudy",
-    "a photo taken when it is windy",
-        "a photo taken when it is calm",
-        "a photo taken when it is windy",
-        "a photo taken when it is calm",
+        "a photo taken when it is sunny",
     "a photo taken when it is humid",
         "a photo taken when it is dry",
-        "a photo taken when it is dry",
-        "a photo taken when it is humid",
+    "a photo taken when it is windy",
+        "a photo taken when it is calm",
     "a photo taken on a monday",
         "a photo taken on a tuesday",
-        "a photo taken on a wednesday",
-        "a photo taken on a thursday"
 ]
 
 def col_partial_argmax(logits: torch.Tensor, 
-                group_size: int = 4,
+                group_size: int = 2,
                 output_softmax: bool = True) -> tuple[torch.Tensor, (torch.Tensor | None)]:
     '''
         Perform softmax on each group of cols in the logits tensor.
@@ -77,7 +93,7 @@ def col_partial_argmax(logits: torch.Tensor,
         group_size: Number of rows to group together
         output_argmax: If True, return the argmax of the softmax result
     '''
-    print(logits.shape)
+    # print(logits.shape)
     assert logits.shape[1] % group_size == 0, "Number of col should be divisible by group size"
 
     num_groups = logits.shape[1] // group_size
@@ -109,13 +125,14 @@ class CLIPLoRABenchmarkRunner:
 
         benchmark_dataset = EmbedDataset(data_root_dir, 
                                                 img_embed_dir=img_embed_dir,
-                                                csv_file="val30", 
+                                                csv_file=DEFAULT_BENCHDATASET, 
                                                 preprocessor=self.processor,
                                                 context_length=self.context_length)
         self.benchmark_size = len(benchmark_dataset)
         self.bench_loader = torch.utils.data.DataLoader(benchmark_dataset,
-                                batch_size=self.benchmark_size, # Load all at once
-                                shuffle=False)
+                                batch_size=30, # Load all at once
+                                shuffle=False,
+                                drop_last=True)
         self.text_eval_ground_truth = None
         print("Benchmark Dataset Size:", self.benchmark_size)
 
@@ -137,6 +154,7 @@ class CLIPLoRABenchmarkRunner:
                                                             input_mode="input_ids",
                                                             eval_loader=self.bench_loader,
                                                             question_preprocessor=self.processor,
+                                                            eval_ground_truth=True,
                                                             save_dir=dirname(abspath(__file__)))
             self.text_eval_ground_truth = qn_eval_results["text_eval_ground_truth"]
         else:
@@ -173,6 +191,7 @@ class CLIPLoRABenchmarkRunner:
                                                                 ground_truth=self.text_eval_ground_truth,
                                                                 eval_loader=self.bench_loader,
                                                                 question_preprocessor=self.processor,
+                                                                eval_ground_truth=True,
                                                                 save_dir=dirname(abspath(__file__)))
                 self.text_eval_ground_truth = qn_eval_results["text_eval_ground_truth"]
             else:
@@ -216,13 +235,14 @@ class CLIPLoRABenchmarkRunner:
                               model_name: str,
                               eval_loader: torch.utils.data.DataLoader, 
                               top_k: int = 1,
+                              do_plot_heatmap: bool = DEFAULT_DO_PLOT_HEATMAP,
                               save_dir: str = None):
         '''
             Evaluate the model using image retrieval.
             eval_loader: __getitem__ should return (image_embedding, tokenized_caption)
         '''
         assert type(eval_loader.dataset).__name__ == "EmbedDataset", "Loader must be of type EmbedDataset"
-        assert len(eval_loader) == 1, "Batch size of the benchmark dataset must be equal to the dataset size"
+        assert not do_plot_heatmap or len(eval_loader) == 1, "Batch size of the benchmark dataset must be equal to the dataset size"
         model.eval()
         with torch.no_grad():
             metric_acc = torch.zeros(3).to(model.device)
@@ -251,9 +271,9 @@ class CLIPLoRABenchmarkRunner:
                 # Boost the value for top-k to 1.0 for better visualization
                 probs = boost_top_k(probs, k=top_k, dim=1)
  
-                if save_dir is not None:
+                if do_plot_heatmap and save_dir is not None:
 
-                    torch.set_printoptions(sci_mode=False, precision=4, linewidth=200)
+                    # torch.set_printoptions(sci_mode=False, precision=4, linewidth=200)
                     
                     # print(probs)
                     # Ensure the loader is of type EmbedDataset
@@ -264,6 +284,7 @@ class CLIPLoRABenchmarkRunner:
                                  model_name=model_name,
                                  output_mode="save",
                                  save_dir=save_dir)
+                    do_plot_heatmap = False
 
         metric_acc /= len(eval_loader)
         metric_acc = metric_acc.tolist()
@@ -282,6 +303,8 @@ class CLIPLoRABenchmarkRunner:
                                     question_preprocessor: CLIPProcessor = \
                                         CLIPProcessor.from_pretrained(DEFAULT_BASE_MODEL_ID),
                                     ground_truth: torch.Tensor = None,
+                                    eval_ground_truth: bool = False,
+                                    do_plot_heatmap:bool = DEFAULT_DO_PLOT_HEATMAP,
                                     save_dir: str = None):
         '''
             Evaluate the model in the form of question answering.
@@ -293,11 +316,13 @@ class CLIPLoRABenchmarkRunner:
                             with each entry being the index of the correct option for each question (0 to 3).
         '''
         assert type(eval_loader.dataset).__name__ == "EmbedDataset", "Loader must be of type EmbedDataset"
-        assert len(eval_loader) == 1, "Batch size of the benchmark dataset must be equal to the dataset size"
+        assert not do_plot_heatmap or len(eval_loader) == 1, "Batch size of the benchmark dataset must be equal to the dataset size"
         assert input_mode in ["image_embeds", "input_ids"], "Input mode must be either image_embeds or input_ids"
-        assert len(questions) % 4 == 0, "Each question should have 4 options"
+        assert len(questions) % 2 == 0, "Each question should have 2 options"
         model.eval()
         
+        print("Evaluating with textual questions...", model_name)
+
         with torch.no_grad():
 
             metric_acc = None
@@ -309,16 +334,22 @@ class CLIPLoRABenchmarkRunner:
             text_embeds = model.get_text_features(input_ids=inputs["input_ids"])
             text_embeds = text_embeds / text_embeds.norm(p=2, dim=-1, keepdim=True)
 
+            if eval_ground_truth:
+                ground_truth = []
+            
+            do_plot_eval_heatmap = do_plot_heatmap
+
             for i, (image_embeds, input_ids) in enumerate(tqdm(eval_loader)):
 
-                if ground_truth is None:
+                if eval_ground_truth:
                     logits_per_image = torch.matmul(image_embeds, 
                                 text_embeds.t().to(image_embeds.device)) \
                                 * model.logit_scale.exp().to(image_embeds.device)
                     # Perform softmax on each group of rows in the logits tensor.
-                    ground_truth, softmax_result = col_partial_argmax(logits_per_image, group_size=4)
+                    partial, softmax_result = col_partial_argmax(logits_per_image, group_size=2)
+                    ground_truth.append(partial)
 
-                    if save_dir is not None:
+                    if do_plot_eval_heatmap and save_dir is not None:
                    
                         # The image is used as the input for better visualization and since it should be entrywise 
                         # aligned to each set of sensor readings in the dataset anyway.
@@ -330,6 +361,7 @@ class CLIPLoRABenchmarkRunner:
                                     model_name=model_name,
                                     output_mode="save",
                                     save_dir=save_dir)
+                        do_plot_eval_heatmap = False
                     
 
                 if input_mode == "image_embeds":
@@ -348,12 +380,12 @@ class CLIPLoRABenchmarkRunner:
                                                 text_embeds.t().to(input_embeds.device)) \
                                                 * model.logit_scale.exp().to(input_embeds.device)
                 
-                predictions, softmax_result = col_partial_argmax(logits_per_reading, group_size=4)
+                predictions, softmax_result = col_partial_argmax(logits_per_reading, group_size=2)
 
-                assert ground_truth.shape == predictions.shape, "Ground truth should have the same shape as predictions"
-                metric_acc = torch.sum(predictions == ground_truth, dim=0).float() / predictions.shape[0]
- 
-                if save_dir is not None:
+                assert ground_truth[i].shape == predictions.shape, "Ground truth should have the same shape as predictions"
+                metric_acc = torch.sum(predictions == ground_truth[i], dim=0).float() / predictions.shape[0]
+
+                if do_plot_heatmap and save_dir is not None:
                    
                     # The image is used as the input for better visualization and since it should be entrywise 
                     # aligned to each set of sensor readings in the dataset anyway.
@@ -365,6 +397,7 @@ class CLIPLoRABenchmarkRunner:
                                  model_name=model_name,
                                  output_mode="save",
                                  save_dir=save_dir)
+                    do_plot_heatmap = False
                     
             res = {f"text_eval_Q{i}": acc for i, acc in enumerate(metric_acc.tolist())}
             res.update({"text_eval_ground_truth": ground_truth})
@@ -383,7 +416,7 @@ DEFAULT_CHECKPOINT_DIR = "./checkpoints"
 # lora_finetune.train()
 # del lora_finetune
 
-models = ["text_lora-finetuned", "text_lora-finetuned-small", "text_lora-finetuned-multi_group"]
+models = ["text_lora-finetuned", "text_lora-finetuned-permute"]
 models = [join(DEFAULT_CHECKPOINT_DIR, model) for model in models]
 
 runner = CLIPLoRABenchmarkRunner(models=models)
@@ -397,4 +430,3 @@ df = df[columns]
 del df["probs"]
 pd.set_option("display.max_columns", None)
 print(df)
-

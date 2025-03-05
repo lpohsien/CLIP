@@ -55,11 +55,11 @@ class EmbedDataset(Dataset):
     def get_image_paths(self, start, end):
         return [os.path.join(self.images_dir, path) for path in self.captions_df.iloc[start:end, 0]]
 
-    def get_dataset_representation(self):
+    def get_dataset_representation(self, num=30):
         ''' 
             Return a list of image paths and a list of captions and the two lists 
             should be aligned such that the ith caption corresponds to the ith image.
         '''
-        images = [os.path.join(self.images_dir, path) for path in self.captions_df.iloc[:, 0].tolist()]
-        texts = self.captions_df.iloc[:, 1].tolist()
+        images = [os.path.join(self.images_dir, path) for path in self.captions_df.iloc[:num, 0].tolist()]
+        texts = self.captions_df.iloc[:num, 1].tolist()
         return images, texts

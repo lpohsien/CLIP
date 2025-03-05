@@ -11,6 +11,7 @@ import csv
 import logging
 import os
 import torch
+import random
 
 DEFAULT_DATASET_NAME = 'val'
 DEFAULT_CSV_PATH = f'collected_data/{DEFAULT_DATASET_NAME}.csv'
@@ -43,7 +44,12 @@ def reduce_dataset(csv_path: str=DEFAULT_CSV_PATH, image_embeddings_path: str=DE
         logging.warning("Requested size is larger than the dataset. Taking the whole dataset instead.")
         size = total_size
 
-    data = data[:size]    
+    select_index = random.sample(range(0, total_size - 1), size)
+
+    data = [data[i] for i in select_index]  
+
+    for d in data:
+        print(d)
 
     with open(csv_path.replace(original_name, f'{original_name}{size}'), "w", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -60,7 +66,7 @@ def reduce_dataset(csv_path: str=DEFAULT_CSV_PATH, image_embeddings_path: str=DE
             logging.error("Image embeddings not found at %s. Skipping...", image_embeddings_path)
             return
 
-        image_embeds = torch.load(image_embeddings_path, weights_only=True)[:size]
+        image_embeds = torch.load(image_embeddings_path, weights_only=True)[select_index]
         torch.save(image_embeds, image_embeddings_path.replace(original_name, f'{original_name}{size}'))
 
     logging.info(f"Saved {size} embeddings to {image_embeddings_path.replace(original_name, f'{original_name}{size}')}")

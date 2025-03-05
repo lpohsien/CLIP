@@ -106,6 +106,8 @@ def plot_heatmap(similarity,
                     output_mode="none",
                     save_dir=dirname(abspath(__file__)),
                     fit_to_text=True):
+    
+
     assert output_mode in ["show", "save", "both", "none"], \
         "Invalid output mode! Only 'none', 'show', 'save', and 'both' are allowed."
     assert similarity.shape[0] == len(texts), "Number of texts should match the similarity matrix"
@@ -148,5 +150,3 @@ def plot_heatmap(similarity,
     if output_mode in ["show", "both"]:
         plt.show()
 
-matrix = torch.Tensor([[1, 2, 8], 
-                       [3, 4, 3]])

@@ -22,24 +22,14 @@ processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
 questions = [
     "a photo taken in the day",
         "a photo taken at night",
-        "",
-        "",
     "a photo taken when it is raining",
-        "a photo taken when it is cloudy",
-        "a photo taken when it is partly cloudy",
         "a photo taken when it is sunny",
     "a photo taken when it is windy",
         "a photo taken when it is calm",
-        "",
-        "",
     "a photo taken when it is humidy",
         "a photo taken when it is dry",
-        "",
-        "",
     "a photo taken on a monday",
         "a photo taken on a tuesday",
-        "a photo taken on a wednesday",
-        ""
 ]
 
 DO_PRECOMPUTE = True
