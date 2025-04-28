@@ -1,6 +1,6 @@
 # Sensor Encoder
 
-This is the code for CS4101 Final Year Project (AY2025/S2) on Exploring Efficient Sensor Fusion Encoder for Low-Resource Stable Diffusion Pipelines. This repository contains the code to train a sensor encoder using the [Locked Image Tuning Approach (LiT)](https://arxiv.org/abs/2111.07991) with Low Rank Adaptation using the [Peft library](https://huggingface.co/docs/peft/en/index). Note that the base CLIP model used is [CLIP ViT-L14](https://huggingface.co/openai/clip-vit-large-patch14).
+This is the code for CP4101 Final Year Project (AY2025/S2) on Exploring Efficient Sensor Fusion Encoder for Low-Resource Stable Diffusion Pipelines. This repository contains the code to train a sensor encoder using the [Locked Image Tuning Approach (LiT)](https://arxiv.org/abs/2111.07991) with Low Rank Adaptation using the [Peft library](https://huggingface.co/docs/peft/en/index). Note that the base CLIP model used is [CLIP ViT-L14](https://huggingface.co/openai/clip-vit-large-patch14).
 
 # Image embedding precomputation
 
