@@ -71,7 +71,6 @@ class CLIPTrainer:
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.args = args
-        self.compute_metrics = compute_metrics
         self.train_loader = train_loader
         self.eval_loader = eval_loader
         self.num_epochs = num_epochs

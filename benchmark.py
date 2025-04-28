@@ -411,10 +411,10 @@ DEFAULT_CHECKPOINT_DIR = "./checkpoints"
 # lora_finetune.train()
 # del lora_finetune
 
-# lora_finetune = CLIPModelModifier(train_projection=False)
-# lora_finetune.setupTrainer()
-# lora_finetune.train()
-# del lora_finetune
+lora_finetune = CLIPModelModifier(train_projection=False)
+lora_finetune.setupTrainer()
+lora_finetune.train()
+del lora_finetune
 
 models = ["text_lora-finetuned", "text_lora-finetuned-permute"]
 models = [join(DEFAULT_CHECKPOINT_DIR, model) for model in models]
